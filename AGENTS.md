@@ -8,6 +8,10 @@
 - `settings.json` to lokalny plik z kluczami w `tokens[]` (`login`, `token`). Traktuj go jako sekret. Wspólny log `%TEMP%\transcription\logs.json` przechowuje SHA-256 użytego tokena, stan i czas wykonania oraz ewentualny błąd. Rotacja pomija tokeny wykluczone po błędzie autoryzacji, uprawnień lub wyczerpaniu limitu konta.
 - Wykrywanie zdarzeń dźwiękowych jest domyślnie włączone dla modeli Standard i Enhanced. Do Markdown i WebVTT trafiają zdarzenia z pewnością co najmniej 0,90. `laughter`, `music` i `applause` mają polskie etykiety, a pozostałe typy zachowują nazwę z API. Wyłączenie przez `--no-audio-events` w CLI lub `audioEvents: false` w MCP albo w ustawieniach domyślnych.
 
+## Git
+
+Repozytorium Git służy agentowi do prowadzenia historii pracy nad projektem. Agent odpowiada za jej aktualność i zapisuje trwałe zmiany w commicie po każdym zakończonym etapie pracy, zgodnie z globalnymi zasadami Git.
+
 ## Pytania i decyzje
 
 Gdy użytkownik pyta o podejście, format, wariant albo prosi o opinię, odpowiedz zwięźle i przedstaw propozycję. Poczekaj z wdrożeniem na akceptację albo wyraźne polecenie. Jeśli wiadomość łączy polecenie z pytaniem o szczegół, wykonaj niezależną część polecenia, a szczegół pozostaw do decyzji.
