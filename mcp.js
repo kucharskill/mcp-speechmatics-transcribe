@@ -5,9 +5,15 @@ import { defaults, optionFields } from "./options.js";
 import { transcribe } from "./transcribe.js";
 
 function createServer() {
-  const server = new McpServer({ name: "speechmatics-tools", version: "0.1.0" });
+  const description = "Transkrybuje lokalne pliki audio i wideo przez Speechmatics Batch API.";
+  const server = new McpServer({
+    name: "speechmatics-transcribe",
+    title: "Speechmatics Transcribe",
+    version: "0.1.0",
+    description,
+  }, { instructions: description });
   server.registerTool("transcribe", {
-    description: "Transkrybuje lokalny plik przez Speechmatics Batch API. Zwraca ścieżki do surowego JSON, segmentów, napisów WebVTT i transkrypcji Markdown.",
+    description: `${description} Zwraca ścieżki do surowego JSON, segmentów, napisów WebVTT i transkrypcji Markdown.`,
     inputSchema: z.strictObject({
       file: z.string().min(1).describe("Ścieżka do lokalnego pliku audio lub wideo. Użyj ścieżki bezwzględnej."),
       model: optionFields.model.optional().describe(`Model, domyślnie ${defaults.model}.`),
