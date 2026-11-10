@@ -1,11 +1,10 @@
 import { basename, dirname } from "node:path";
 import { buildSegments } from "./segments.js";
 
-function splitParagraph(segment) {
+function splitParagraph(segment, _nextEndTime, _nextWord, sentenceEnd) {
+  if (!(sentenceEnd ?? /[.!?…][”"’')\]]*\s*$/u.test(segment.text))) return false;
   const duration = segment.endTime - segment.startTime;
-  const words = segment.text.trim().split(/\s+/u).length;
-  const endsSentence = /[.!?…][”"’')\]]*\s*$/u.test(segment.text);
-  return duration >= 180 || words >= 500 || (endsSentence && (duration >= 120 || words >= 350));
+  return duration >= 30 || segment.text.trim().split(/\s+/u).length >= 80;
 }
 
 function plainMarkdown(text) {

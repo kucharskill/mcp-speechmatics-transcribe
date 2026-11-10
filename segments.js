@@ -4,6 +4,7 @@ export function buildSegments(transcript, splitBeforeWord) {
   const segments = [];
   let current;
   let joinNext = false;
+  let sentenceEnd;
   for (const result of transcript.results) {
     const { type, start_time: startTime, end_time: endTime } = result;
     const alternative = result.alternatives?.[0];
@@ -11,7 +12,7 @@ export function buildSegments(transcript, splitBeforeWord) {
 
     const speaker = alternative.speaker ?? current?.speaker ?? null;
     if (!current || (type === "word" && (
-      current.speaker !== speaker || (!joinNext && splitBeforeWord?.(current, endTime, alternative.content))
+      current.speaker !== speaker || (!joinNext && splitBeforeWord?.(current, endTime, alternative.content, sentenceEnd))
     ))) {
       current = { speaker, startTime: startTime ?? null, endTime: endTime ?? null, text: "" };
       segments.push(current);
@@ -24,6 +25,8 @@ export function buildSegments(transcript, splitBeforeWord) {
     current.text += space + alternative.content;
     if (Number.isFinite(endTime)) current.endTime = Math.max(current.endTime ?? endTime, endTime);
     joinNext = punctuation && ["next", "both"].includes(attachesTo);
+    if (!punctuation) sentenceEnd = undefined;
+    else if (sentenceEnd !== true && typeof result.is_eos === "boolean") sentenceEnd = result.is_eos;
   }
   return { speakers: [...new Set(segments.map(({ speaker }) => speaker).filter(Boolean))], segments };
 }
