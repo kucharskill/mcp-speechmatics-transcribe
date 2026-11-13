@@ -29,7 +29,7 @@ export function parseTokens(source) {
   return parsed.data;
 }
 
-export async function loadConfig(overrides = {}) {
+export async function loadConfig(overrides = {}, { requireTokens = true } = {}) {
   const environment = { ...process.env };
   const loaded = dotenv.config({
     path: fileURLToPath(new URL("./.env", import.meta.url)),
@@ -38,10 +38,10 @@ export async function loadConfig(overrides = {}) {
   });
   if (loaded.error && loaded.error.code !== "ENOENT") throw loaded.error;
 
-  if (environment.SPEECHMATICS_TOKENS === undefined) {
+  if (requireTokens && environment.SPEECHMATICS_TOKENS === undefined) {
     throw new Error("Ustaw SPEECHMATICS_TOKENS w środowisku procesu lub projektowym .env.");
   }
-  const tokens = parseTokens(environment.SPEECHMATICS_TOKENS);
+  const tokens = requireTokens ? parseTokens(environment.SPEECHMATICS_TOKENS) : [];
   const env = environmentSchema.parse(environment);
   const environmentOptions = {
     model: env.SPEECHMATICS_MODEL,

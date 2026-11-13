@@ -5,7 +5,7 @@ import { optionFields } from "./options.js";
 import { loadConfig } from "./config.js";
 import { transcribe } from "./transcribe.js";
 
-const { options: configuredDefaults } = await loadConfig();
+const { options: configuredDefaults } = await loadConfig({}, { requireTokens: false });
 
 function createServer() {
   const description = "Transkrybuje lokalne pliki audio i wideo przez Speechmatics Batch API.";
