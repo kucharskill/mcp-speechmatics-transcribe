@@ -25,21 +25,21 @@ export function parseTokens(source) {
       : { login: entry.slice(0, separator).trim(), token: entry.slice(separator + 1).trim() };
   });
   const parsed = tokenSchema.safeParse(tokens);
-  if (!parsed.success) throw new Error("SPEECHMATICS_TOKENS zawiera pusty token. Użyj token lub login:token, rozdzielając wpisy przecinkami.");
+  if (!parsed.success) throw new Error("SPEECHMATICS_TOKENS contains an empty token. Use token or login:token, separated by commas.");
   return parsed.data;
 }
 
 export async function loadConfig(overrides = {}, { requireTokens = true } = {}) {
   const environment = { ...process.env };
   const loaded = dotenv.config({
-    path: fileURLToPath(new URL("../.env", import.meta.url)),
+    path: process.env.SPEECHMATICS_ENV_FILE ?? fileURLToPath(new URL("../.env", import.meta.url)),
     processEnv: environment,
     quiet: true,
   });
   if (loaded.error && loaded.error.code !== "ENOENT") throw loaded.error;
 
   if (requireTokens && environment.SPEECHMATICS_TOKENS === undefined) {
-    throw new Error("Ustaw SPEECHMATICS_TOKENS w środowisku procesu lub projektowym .env.");
+    throw new Error("Set SPEECHMATICS_TOKENS in the process environment or .env file.");
   }
   const tokens = requireTokens ? parseTokens(environment.SPEECHMATICS_TOKENS) : [];
   const env = environmentSchema.parse(environment);

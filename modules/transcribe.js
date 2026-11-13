@@ -19,14 +19,14 @@ async function convertAudio(input, output) {
     await ffmpeg("ffmpeg", [...args, "-c:a", "copy", output], { windowsHide: true });
     return "copy";
   } catch (error) {
-    if (error.code === "ENOENT") throw new Error("Nie znaleziono ffmpeg w PATH.");
+    if (error.code === "ENOENT") throw new Error("FFmpeg was not found in PATH.");
   }
   try {
     await ffmpeg("ffmpeg", [...args, "-c:a", "libmp3lame", "-q:a", "2", output], { windowsHide: true });
     return "encoded";
   } catch (error) {
     await rm(output, { force: true });
-    throw new Error(`FFmpeg nie przekonwertował pliku: ${error.stderr?.trim() || error.message}`);
+    throw new Error(`FFmpeg could not convert the file: ${error.stderr?.trim() || error.message}`);
   }
 }
 
@@ -37,7 +37,7 @@ function writeJson(file, data) {
 export async function transcribe(file, overrides = {}) {
   const input = resolve(file);
   const inputName = basename(input);
-  if (!(await stat(input)).isFile()) throw new Error(`Wskaż plik audio lub wideo: ${input}`);
+  if (!(await stat(input)).isFile()) throw new Error(`Expected an audio or video file: ${input}`);
   const { tokens, options } = await loadConfig(overrides);
   options.audioEvents &&= ["standard", "enhanced"].includes(options.model);
 
@@ -61,7 +61,7 @@ export async function transcribe(file, overrides = {}) {
       conversion = await convertAudio(input, convertedFile);
     }
     candidate = await reserveToken(tokens, record);
-    if (!candidate) throw new Error("Brak aktywnych tokenów. Sprawdź log i SPEECHMATICS_TOKENS.");
+    if (!candidate) throw new Error("No active tokens remain. Check the log and SPEECHMATICS_TOKENS.");
     record.tokenSha256 = candidate.sha;
 
     const signal = AbortSignal.timeout(options.timeoutSeconds * 1000);
@@ -106,7 +106,7 @@ export async function transcribe(file, overrides = {}) {
     logError = error.message;
   }
   if (record.error || logError) {
-    const failure = record.error ?? { message: "Nie udało się zapisać logu." };
+    const failure = record.error ?? { message: "Could not save the log." };
     throw Object.assign(new Error(failure.message), {
       result: {
         ...failure, ...(logError && { logError }), jobId: record.jobId,

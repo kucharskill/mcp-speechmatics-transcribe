@@ -19,7 +19,7 @@ async function updateLog(update) {
       throw error;
     });
     const entries = JSON.parse(source);
-    if (!Array.isArray(entries)) throw new Error("logs.json musi zawierać tablicę rekordów.");
+    if (!Array.isArray(entries)) throw new Error("logs.json must contain an array of records.");
     const result = update(entries);
     const temporaryPath = join(outputRoot, `logs-${randomUUID()}.tmp`);
     try {

@@ -1,14 +1,48 @@
 {
-  "name": "speechmatics-tools",
+  "name": "speechmatics-transcribe",
   "version": "0.1.0",
-  "private": true,
+  "description": "Transcribe audio and video files with Speechmatics through a CLI and MCP server.",
   "type": "module",
-  "scripts": {
-    "cli": "node cli.js",
-    "mcp": "node mcp.js"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kucharskill/speechmatics-transcribe.git"
   },
+  "homepage": "https://github.com/kucharskill/speechmatics-transcribe#readme",
+  "bugs": {
+    "url": "https://github.com/kucharskill/speechmatics-transcribe/issues"
+  },
+  "keywords": [
+    "speechmatics",
+    "transcription",
+    "mcp",
+    "cli",
+    "subtitles",
+    "webvtt"
+  ],
   "engines": {
     "node": ">=22.12.0"
+  },
+  "bin": {
+    "speechmatics-transcribe": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "mcp.js",
+    "modules/",
+    "README.md",
+    "LICENSE",
+    ".env.example"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "cli": "node cli.js",
+    "mcp": "node mcp.js",
+    "check": "node scripts/check.mjs",
+    "release:prepare": "npm run check && node scripts/prepare-release.mjs",
+    "release:publish": "node scripts/publish-release.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.4.0",
@@ -16,6 +50,5 @@
     "dotenv": "^18.0.10",
     "proper-lockfile": "^4.1.2",
     "zod": "^4.6.7"
-  },
-  "description": "CLI and MCP server for Speechmatics audio and video transcription."
+  }
 }

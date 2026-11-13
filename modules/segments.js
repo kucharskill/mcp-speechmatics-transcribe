@@ -1,5 +1,5 @@
 export function buildSegments(transcript, splitBeforeWord) {
-  if (!Array.isArray(transcript.results)) throw new Error("Brak tablicy results w transkrypcji json-v2.");
+  if (!Array.isArray(transcript.results)) throw new Error("Missing results array in the json-v2 transcript.");
 
   const segments = [];
   let current;

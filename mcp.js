@@ -1,30 +1,32 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
+import { readFile } from "node:fs/promises";
 import { optionFields } from "./modules/options.js";
 import { loadConfig } from "./modules/config.js";
 import { transcribe } from "./modules/transcribe.js";
 
 const { options: configuredDefaults } = await loadConfig({}, { requireTokens: false });
+const { version } = JSON.parse(await readFile(new URL("./package.json", import.meta.url), "utf8"));
 
 function createServer() {
-  const description = "Transkrybuje lokalne pliki audio i wideo przez Speechmatics Batch API.";
+  const description = "Transcribe local audio and video files through the Speechmatics Batch API.";
   const server = new McpServer({
     name: "speechmatics-transcribe",
     title: "Speechmatics Transcribe",
-    version: "0.1.0",
+    version,
     description,
   }, { instructions: description });
   server.registerTool("transcribe", {
-    description: `${description} Zwraca ścieżki do surowego JSON, segmentów, napisów WebVTT i transkrypcji Markdown.`,
+    description: `${description} Return paths to raw JSON, segments, WebVTT subtitles, and Markdown.`,
     inputSchema: z.strictObject({
-      file: z.string().min(1).describe("Ścieżka do lokalnego pliku audio lub wideo. Użyj ścieżki bezwzględnej."),
-      model: optionFields.model.optional().describe(`Domyślny model z konfiguracji: ${configuredDefaults.model}. enhanced: najwyższa dokładność dla wybranego języka. standard: szybsze przetwarzanie i archiwizacja. melia-1: MULTILANGUAGE, nagrania ze zmianą języka. oak-1: MULTILANGUAGE, wielojęzyczne nagrania medyczne. Dla melia-1 i oak-1 podaj language=multi. Te dwa modele nie obsługują zdarzeń dźwiękowych.`),
-      language: optionFields.language.optional().describe(`Domyślny język z konfiguracji: ${configuredDefaults.language}. Kod języka, np. pl lub en, dla enhanced i standard. Dla modeli MULTILANGUAGE melia-1 i oak-1 ustaw multi.`),
-      disableDiarization: z.boolean().optional().describe(`Domyślne rozróżnianie mówców z konfiguracji: ${configuredDefaults.diarization === "none" ? "wyłączone" : "włączone"}. true wyłącza diarizację. Pominięcie lub false stosuje ustawienie serwera.`),
-      audioEvents: optionFields.audioEvents.optional().describe(`Domyślna wartość z konfiguracji: ${configuredDefaults.audioEvents}. Wykrywaj śmiech, muzykę i oklaski w Standard i Enhanced. W melia-1 i oak-1 funkcja jest automatycznie wyłączana. false wyłącza wykrywanie.`),
-      convertToMp3: optionFields.convertToMp3.optional().describe(`Domyślna wartość z konfiguracji: ${configuredDefaults.convertToMp3}. Konwertuj pliki inne niż MP3 przez systemowy FFmpeg przed wysłaniem.`),
-      timeoutSeconds: optionFields.timeoutSeconds.optional().describe(`Domyślny limit z konfiguracji: ${configuredDefaults.timeoutSeconds} sekund. Czas oczekiwania na wysłanie pliku i wynik API, niezależny od długości nagrania.`),
+      file: z.string().min(1).describe("Absolute path to a local audio or video file."),
+      model: optionFields.model.optional().describe(`Configured default: ${configuredDefaults.model}. enhanced: highest accuracy for a selected language. standard: faster processing and archival transcription. melia-1: MULTILANGUAGE, language switching within recordings. oak-1: MULTILANGUAGE, healthcare recordings. Use language=multi for melia-1 and oak-1; neither supports audio events.`),
+      language: optionFields.language.optional().describe(`Configured default: ${configuredDefaults.language}. Language code such as pl or en for enhanced/standard. Use multi for MULTILANGUAGE models melia-1 and oak-1.`),
+      disableDiarization: z.boolean().optional().describe(`Configured speaker diarization: ${configuredDefaults.diarization === "none" ? "disabled" : "enabled"}. Set true to disable it. Omit or pass false to use the server setting.`),
+      audioEvents: optionFields.audioEvents.optional().describe(`Configured default: ${configuredDefaults.audioEvents}. Detect laughter, music, and applause with Standard/Enhanced. Automatically disabled for melia-1/oak-1. Set false to disable.`),
+      convertToMp3: optionFields.convertToMp3.optional().describe(`Configured default: ${configuredDefaults.convertToMp3}. Convert non-MP3 files with system FFmpeg before uploading.`),
+      timeoutSeconds: optionFields.timeoutSeconds.optional().describe(`Configured default: ${configuredDefaults.timeoutSeconds} seconds. Upload and API processing timeout, independent of recording duration.`),
     }),
   }, async ({ file, disableDiarization, ...options }) => {
     try {

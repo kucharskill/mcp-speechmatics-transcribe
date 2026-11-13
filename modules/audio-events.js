@@ -1,7 +1,7 @@
 const minimumConfidence = 0.9;
 const labels = new Map([
   ["applause", "Oklaski"],
-  ["laughter", "Śmiech"],
+  ["laughter", "\u015amiech"],
   ["music", "Muzyka"],
 ]);
 

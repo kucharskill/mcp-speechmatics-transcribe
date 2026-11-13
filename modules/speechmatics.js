@@ -26,8 +26,8 @@ async function request(path, token, signal, body) {
       redirect: "error",
     });
   } catch (error) {
-    if (signal.aborted) throw new ApiError("Przekroczono limit czasu oczekiwania na Speechmatics.");
-    throw new ApiError(`Nie udało się połączyć ze Speechmatics (${error.cause?.code ?? error.name}).`);
+    if (signal.aborted) throw new ApiError("Timed out waiting for Speechmatics.");
+    throw new ApiError(`Could not connect to Speechmatics (${error.cause?.code ?? error.name}).`);
   }
 
   const data = await response.json().catch(() => null);
@@ -35,14 +35,14 @@ async function request(path, token, signal, body) {
     const details = [data?.error, data?.detail, data?.message, data?.type]
       .filter((value) => typeof value === "string");
     throw new ApiError(
-      `Speechmatics HTTP ${response.status}: ${details.join(" | ") || response.statusText || "błąd API"}`,
+      `Speechmatics HTTP ${response.status}: ${details.join(" | ") || response.statusText || "API error"}`,
       response.status,
     );
   }
   if (!data) {
     const message = signal.aborted
-      ? "Przekroczono limit czasu oczekiwania na Speechmatics."
-      : "Speechmatics zwrócił odpowiedź bez poprawnego JSON.";
+      ? "Timed out waiting for Speechmatics."
+      : "Speechmatics returned invalid JSON.";
     throw new ApiError(message);
   }
   return data;
@@ -61,7 +61,7 @@ export async function submitJob(file, token, options, signal) {
     },
   }));
   const { id } = await request("/v2/jobs", token, signal, form);
-  if (typeof id !== "string" || !id) throw new ApiError("Speechmatics nie zwrócił identyfikatora zadania.");
+  if (typeof id !== "string" || !id) throw new ApiError("Speechmatics did not return a job ID.");
   return id;
 }
 
@@ -75,11 +75,11 @@ export async function getTranscript(id, token, signal) {
     if (!["running", "created", "queued"].includes(job?.status)) {
       const errors = Array.isArray(job?.errors) ? job.errors.map((error) =>
         typeof error === "string" ? error : JSON.stringify(error)) : [];
-      throw new ApiError(`Speechmatics zakończył zadanie ze statusem ${job?.status ?? "nieznanym"}.`, null, errors);
+      throw new ApiError(`Speechmatics finished the job with status ${job?.status ?? "unknown"}.`, null, errors);
     }
     await delay(3000, undefined, { signal }).catch((error) => {
       if (!signal.aborted) throw error;
     });
   }
-  throw new ApiError("Przekroczono limit czasu oczekiwania na Speechmatics.");
+  throw new ApiError("Timed out waiting for Speechmatics.");
 }

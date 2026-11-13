@@ -36,7 +36,7 @@ export function buildMarkdown(input, transcript, audioEvents = []) {
   for (const { speaker, startTime, text } of timeline) {
     const body = plainMarkdown(text);
     if (!body) continue;
-    const label = plainMarkdown(speaker?.replace(/^S([0-9]+)$/, "Rozmówca $1") ?? "");
+    const label = plainMarkdown(speaker?.replace(/^S([0-9]+)$/, "Rozm\u00f3wca $1") ?? "");
     const prefix = [label, startLabel(startTime)].filter(Boolean).join(" · ");
     blocks.push(prefix ? `**${prefix}** ${body}` : body);
   }
