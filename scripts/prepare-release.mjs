@@ -12,9 +12,10 @@ const packedResult = JSON.parse(execFileSync(process.execPath, [
 const packed = Array.isArray(packedResult) ? packedResult[0] : packedResult[pkg.name];
 const expected = [
   "package.json", "cli.js", "mcp.js", "README.md", "LICENSE", ".env.example",
-  "modules/audio-events.js", "modules/config.js", "modules/history.js", "modules/markdown.js",
+  "modules/audio-events.js", "modules/cli-process.js", "modules/cli-protocol.js",
+  "modules/config.js", "modules/history.js", "modules/markdown.js",
   "modules/options.js", "modules/segments.js", "modules/speechmatics.js",
-  "modules/subtitles.js", "modules/transcribe.js",
+  "modules/subtitles.js", "modules/tools.js", "modules/transcribe.js",
 ].sort();
 const actual = packed.files.map(({ path }) => path).sort();
 if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error("Unexpected files in the npm archive.");
