@@ -1,18 +1,17 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { selectAudioEvents } from "./audio-events.js";
 import { logPath, outputRoot, reserveToken, updateRecord } from "./history.js";
 import { buildMarkdown } from "./markdown.js";
-import { defaults, optionsSchema } from "./options.js";
+import { loadConfig } from "./config.js";
 import { buildSegments } from "./segments.js";
 import { ApiError, getTranscript, submitJob } from "./speechmatics.js";
 import { buildWebVtt } from "./subtitles.js";
 
 const ffmpeg = promisify(execFile);
-const settingsPath = new URL("./settings.json", import.meta.url);
 
 async function convertAudio(input, output) {
   const args = ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", input, "-map", "0:a:0"];
@@ -39,17 +38,7 @@ export async function transcribe(file, overrides = {}) {
   const input = resolve(file);
   const inputName = basename(input);
   if (!(await stat(input)).isFile()) throw new Error(`Wskaż plik audio lub wideo: ${input}`);
-  const settings = JSON.parse((await readFile(settingsPath, "utf8")).replace(/^\uFEFF/, ""));
-  const tokens = settings.tokens;
-  if (!Array.isArray(tokens) || !tokens.length
-      || tokens.some((entry) => typeof entry?.token !== "string" || !entry.token.trim())) {
-    throw new Error("settings.json musi zawierać niepustą tablicę tokens z wartościami token.");
-  }
-  const options = optionsSchema.parse({
-    ...defaults,
-    ...settings.defaults,
-    ...Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined)),
-  });
+  const { tokens, options } = await loadConfig(overrides);
   options.audioEvents &&= ["standard", "enhanced"].includes(options.model);
 
   const started = Date.now();
@@ -72,7 +61,7 @@ export async function transcribe(file, overrides = {}) {
       conversion = await convertAudio(input, convertedFile);
     }
     candidate = await reserveToken(tokens, record);
-    if (!candidate) throw new Error("Brak aktywnych tokenów. Sprawdź log i uzupełnij settings.json.");
+    if (!candidate) throw new Error("Brak aktywnych tokenów. Sprawdź log i SPEECHMATICS_TOKENS.");
     record.tokenSha256 = candidate.sha;
 
     const signal = AbortSignal.timeout(options.timeoutSeconds * 1000);

@@ -14,7 +14,7 @@ const program = new Command()
   .option("--convert-to-mp3", "Konwertuj wejście inne niż MP3 za pomocą ffmpeg")
   .option("--no-convert-to-mp3", "Wyłącz konwersję do MP3")
   .option("--timeout-seconds <sekundy>", `Limit czasu API (domyślnie ${defaults.timeoutSeconds} s)`, Number)
-  .addHelpText("after", "\nOpcjonalne settings.json → defaults nadpisuje wartości domyślne. Flagi CLI mają pierwszeństwo.")
+  .addHelpText("after", "\nKonfiguracja .env z katalogu projektu. Pierwszeństwo: flagi CLI, środowisko procesu, .env, settings.json, wartości wbudowane.")
   .action(async (file, options) => {
     try {
       console.log(JSON.stringify(await transcribe(file, options), null, 2));
