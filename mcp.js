@@ -12,7 +12,7 @@ const { version } = JSON.parse(await readFile(new URL("./package.json", import.m
 function createServer() {
   const description = "Transcribe local audio and video files through the Speechmatics Batch API.";
   const server = new McpServer({
-    name: "speechmatics-transcribe",
+    name: "mcp-speechmatics-transcribe",
     title: "Speechmatics Transcribe",
     version,
     description,

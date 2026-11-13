@@ -1,16 +1,16 @@
 {
-  "name": "speechmatics-transcribe",
-  "version": "0.1.1",
+  "name": "mcp-speechmatics-transcribe",
+  "version": "0.1.2",
   "description": "Transcribe audio and video files with Speechmatics through a CLI and MCP server.",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kucharskill/speechmatics-transcribe.git"
+    "url": "git+https://github.com/kucharskill/mcp-speechmatics-transcribe.git"
   },
-  "homepage": "https://github.com/kucharskill/speechmatics-transcribe#readme",
+  "homepage": "https://github.com/kucharskill/mcp-speechmatics-transcribe#readme",
   "bugs": {
-    "url": "https://github.com/kucharskill/speechmatics-transcribe/issues"
+    "url": "https://github.com/kucharskill/mcp-speechmatics-transcribe/issues"
   },
   "keywords": [
     "speechmatics",
@@ -24,7 +24,7 @@
     "node": ">=22.12.0"
   },
   "bin": {
-    "speechmatics-transcribe": "cli.js"
+    "mcp-speechmatics-transcribe": "cli.js"
   },
   "files": [
     "cli.js",

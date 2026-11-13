@@ -7,7 +7,7 @@ import { transcribe } from "./modules/transcribe.js";
 
 const { version } = JSON.parse(await readFile(new URL("./package.json", import.meta.url), "utf8"));
 const program = new Command()
-  .name("speechmatics-transcribe")
+  .name("mcp-speechmatics-transcribe")
   .version(version)
   .description("Transcribe audio and video files to JSON, WebVTT, and Markdown.")
   .option("--env-file <path>", "Load an explicit .env file (also supported through SPEECHMATICS_ENV_FILE)")

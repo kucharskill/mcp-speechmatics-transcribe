@@ -8,14 +8,14 @@ Requires Node.js 22.12+. Optional MP3 conversion requires FFmpeg in PATH.
 Set SPEECHMATICS_TOKENS in your environment, then run:
 
 ```sh
-npx -y --prefer-online speechmatics-transcribe@latest recording.mp4
-npx -y --prefer-online speechmatics-transcribe@latest --help
+npx -y --prefer-online mcp-speechmatics-transcribe@latest recording.mp4
+npx -y --prefer-online mcp-speechmatics-transcribe@latest --help
 ```
 
 Alternatively, copy .env.example to a local .env, enter your tokens, and pass its path:
 
 ```sh
-npx -y --prefer-online speechmatics-transcribe@latest --env-file /path/to/.env recording.mp4
+npx -y --prefer-online mcp-speechmatics-transcribe@latest --env-file /path/to/.env recording.mp4
 ```
 
 Token entries are comma-separated. Each entry is a token or login:token.
@@ -26,9 +26,9 @@ Logins are optional. Keep credentials outside the repository.
 ```json
 {
   "mcpServers": {
-    "speechmatics-transcribe": {
+    "mcp-speechmatics-transcribe": {
       "command": "npx",
-      "args": ["-y", "--prefer-online", "speechmatics-transcribe@latest", "mcp"],
+      "args": ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", "mcp"],
       "env": {
         "SPEECHMATICS_TOKENS": "YOUR_API_TOKEN"
       }
