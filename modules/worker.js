@@ -6,9 +6,9 @@ import { executeTool } from "./tools.js";
 // Keep arguments and credentials on stdin/environment, outside the shell command.
 export function runWorker(name, args) {
   return new Promise((done, reject) => {
-    const args = ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", "--worker"];
+    const launchArgs = ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", "--worker"];
     const windows = process.platform === "win32";
-    const child = spawn(windows ? "npx " + args.join(" ") : "npx", windows ? [] : args, {
+    const child = spawn(windows ? "npx " + launchArgs.join(" ") : "npx", windows ? [] : launchArgs, {
       shell: windows,
       windowsHide: true,
       stdio: ["pipe", "pipe", "inherit"],
