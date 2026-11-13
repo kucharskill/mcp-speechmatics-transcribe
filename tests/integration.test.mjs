@@ -40,6 +40,21 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
   const mock = join(directory, "mock.mjs");
   await writeFile(mock, `
     import assert from "node:assert/strict";
+    import childProcess from "node:child_process";
+    import { syncBuiltinESMExports } from "node:module";
+    import { appendFileSync } from "node:fs";
+    const originalSpawn = childProcess.spawn;
+    let workerCalls = 0;
+    childProcess.spawn = (command, args, options) => {
+      if (!command.startsWith("npx")) return originalSpawn(command, args, options);
+      const expected = ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", "--worker"];
+      assert.equal(command, process.platform === "win32" ? "npx " + expected.join(" ") : "npx");
+      assert.deepEqual(args, process.platform === "win32" ? [] : expected);
+      appendFileSync(${JSON.stringify(join(directory, "workers.log"))}, "worker\\n");
+      if (++workerCalls === 3) return originalSpawn(process.execPath, ["-e", "process.exit(7)"], { ...options, shell: false });
+      return originalSpawn(process.execPath, ["--import", import.meta.url, ${JSON.stringify(join(root, "cli.js"))}, "--worker"], { ...options, shell: false });
+    };
+    syncBuiltinESMExports();
     globalThis.fetch = async (url, init) => {
       if (init.method === "POST") {
         assert.equal(init.headers.Authorization, "Bearer synthetic-token");
@@ -68,7 +83,7 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
 
     // Missing credentials must not prevent tool discovery.
     await writeFile(envFile, "SPEECHMATICS_LANGUAGE=en\n");
-    const child = spawn(process.execPath, [...childArgs, "mcp"], { cwd: directory, env: environment });
+    const child = spawn(process.execPath, childArgs, { cwd: directory, env: environment });
     const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
     let errors = "";
     child.stderr.on("data", (chunk) => { errors += chunk; });
@@ -94,6 +109,12 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
       await writeFile(envFile, "SPEECHMATICS_TOKENS=synthetic-token\nSPEECHMATICS_LANGUAGE=en\n");
       const recovered = await call("tools/call", { name: "transcribe", arguments: { file: input } });
       assert.equal(recovered.result.structuredContent.jobId, "synthetic-job");
+      const crashed = await call("tools/call", { name: "transcribe", arguments: { file: input } });
+      assert.equal(crashed.result.isError, true);
+      assert.match(crashed.result.content[0].text, /Worker exited with 7/);
+      const retry = await call("tools/call", { name: "transcribe", arguments: { file: input, disableDiarization: true } });
+      assert.equal(retry.result.structuredContent.jobId, "synthetic-job");
+      assert.equal((await readFile(join(directory, "workers.log"), "utf8")).trim().split("\n").length, 4);
     } finally {
       const closed = new Promise((done) => child.once("close", done));
       child.stdin.end();
@@ -101,6 +122,48 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
     }
   } finally {
     assert.equal(dirname(directory), join(root, "work"));
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("worker validates protocol, tool names, and arguments without starting MCP", () => {
+  for (const [request, message] of [
+    [{ protocol: 2 }, /Unsupported worker protocol/],
+    [{ protocol: 1, name: "constructor", arguments: {} }, /Unknown tool/],
+    [{ protocol: 1, name: "transcribe", arguments: {} }, /file/],
+  ]) {
+    const output = execFileSync(process.execPath, ["cli.js", "--worker"], {
+      input: JSON.stringify(request), encoding: "utf8",
+    });
+    const response = JSON.parse(output);
+    assert.equal(response.isError, true);
+    assert.match(response.content[0].text, message);
+  }
+});
+
+test("Windows launcher passes the fixed npx command through a cmd shim", {
+  skip: process.platform !== "win32",
+}, async () => {
+  const root = resolve(".");
+  const directory = await mkdtemp(join(root, "work", "launcher-"));
+  try {
+    await writeFile(join(directory, "npx.cmd"), [
+      "@echo off",
+      'if not "%*"=="-y --prefer-online mcp-speechmatics-transcribe@latest --worker" exit /b 8',
+      `"${process.execPath}" "${join(root, "cli.js")}" --worker`,
+      "",
+    ].join("\r\n"));
+    const environment = { ...process.env };
+    const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path");
+    environment[pathKey] = directory + ";" + environment[pathKey];
+    const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
+      import { runWorker } from ${JSON.stringify(pathToFileURL(join(root, "modules/worker.js")).href)};
+      console.log(JSON.stringify(await runWorker("unknown-tool", {})));
+    `], { env: environment, encoding: "utf8" });
+    const response = JSON.parse(output);
+    assert.equal(response.isError, true);
+    assert.match(response.content[0].text, /Unknown tool/);
+  } finally {
     await rm(directory, { recursive: true, force: true });
   }
 });

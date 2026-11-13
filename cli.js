@@ -11,7 +11,7 @@ const program = new Command()
   .version(version)
   .description("Transcribe audio and video files to JSON, WebVTT, and Markdown.")
   .option("--env-file <path>", "Load an explicit .env file (also supported through SPEECHMATICS_ENV_FILE)")
-  .argument("<file>", "Path to an audio or video file")
+  .argument("[file]", "Path to an audio or video file")
   .addOption(new Option("--model <model>", `Model (default: ${defaults.model})`).choices(optionFields.model.options))
   .option("--language <code>", `Language (default: ${defaults.language}); use multi with multilingual models`)
   .addOption(new Option("--diarization <mode>", `Diarization (default: ${defaults.diarization})`).choices(optionFields.diarization.options))
@@ -26,6 +26,10 @@ const program = new Command()
     if (envFile) process.env.SPEECHMATICS_ENV_FILE = resolve(envFile);
   })
   .action(async (file, { envFile, ...options }) => {
+    if (!file) {
+      await import("./mcp.js");
+      return;
+    }
     try {
       console.log(JSON.stringify(await transcribe(file, options), null, 2));
     } catch (error) {
@@ -38,4 +42,9 @@ program.command("mcp")
   .description("Start the MCP server over stdio")
   .action(async () => { await import("./mcp.js"); });
 
-await program.parseAsync();
+if (process.argv.length === 3 && process.argv[2] === "--worker") {
+  const { serveWorker } = await import("./modules/worker.js");
+  await serveWorker();
+} else {
+  await program.parseAsync();
+}

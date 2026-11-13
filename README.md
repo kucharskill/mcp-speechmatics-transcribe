@@ -28,7 +28,7 @@ Logins are optional. Keep credentials outside the repository.
   "mcpServers": {
     "mcp-speechmatics-transcribe": {
       "command": "npx",
-      "args": ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", "mcp"],
+      "args": ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest"],
       "env": {
         "SPEECHMATICS_TOKENS": "YOUR_API_TOKEN"
       }
@@ -38,8 +38,16 @@ Logins are optional. Keep credentials outside the repository.
 ```
 
 On Windows, clients that require an executable path can use npx.cmd.
-For a local env file, insert --env-file and its absolute path before mcp.
-Restart the MCP server to pick up a new package version. Allow enough tool time for
+For a local env file, append --env-file and its absolute path.
+With no file argument, the command starts the MCP server; the explicit mcp subcommand
+remains supported. Each tool call starts a separate worker through
+npx -y --prefer-online mcp-speechmatics-transcribe@latest --worker. npm checks latest
+and reuses cached packages. The running server keeps its tool definitions until
+restarted, while each new worker uses the version resolved for that call. In-flight
+calls continue with their starting version. The worker inherits the environment
+and selected env-file path; tool arguments travel over stdin. npm startup or network
+failures are returned as tool errors without stopping the MCP server.
+Allow enough tool time for npm startup,
 uploads and processing; the built-in API timeout is 900 seconds.
 
 The transcribe tool requires an absolute file path. Optional parameters are model,
