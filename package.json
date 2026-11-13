@@ -1,6 +1,6 @@
 {
   "name": "speechmatics-transcribe",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Transcribe audio and video files with Speechmatics through a CLI and MCP server.",
   "type": "module",
   "license": "MIT",
