@@ -47,12 +47,14 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
     let workerCalls = 0;
     childProcess.spawn = (command, args, options) => {
       if (!command.startsWith("npx")) return originalSpawn(command, args, options);
-      const expected = ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", "--worker"];
+      const mode = process.platform === "win32" ? command.split(" ").at(-1) : args.at(-1);
+      assert.ok(["--tool-manifest", "--execute-tool"].includes(mode));
+      const expected = ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", mode];
       assert.equal(command, process.platform === "win32" ? "npx " + expected.join(" ") : "npx");
       assert.deepEqual(args, process.platform === "win32" ? [] : expected);
-      appendFileSync(${JSON.stringify(join(directory, "workers.log"))}, "worker\\n");
-      if (++workerCalls === 3) return originalSpawn(process.execPath, ["-e", "process.exit(7)"], { ...options, shell: false });
-      return originalSpawn(process.execPath, ["--import", import.meta.url, ${JSON.stringify(join(root, "cli.js"))}, "--worker"], { ...options, shell: false });
+      if (mode === "--execute-tool") appendFileSync(${JSON.stringify(join(directory, "workers.log"))}, "worker\\n");
+      if (mode === "--execute-tool" && ++workerCalls === 3) return originalSpawn(process.execPath, ["-e", "process.exit(7)"], { ...options, shell: false });
+      return originalSpawn(process.execPath, ["--import", import.meta.url, ${JSON.stringify(join(root, "cli.js"))}, mode], { ...options, shell: false });
     };
     syncBuiltinESMExports();
     globalThis.fetch = async (url, init) => {
@@ -88,11 +90,16 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
     let errors = "";
     child.stderr.on("data", (chunk) => { errors += chunk; });
     let id = 0;
+    const notifications = [];
     async function call(method, params) {
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: ++id, method, params }) + "\n");
-      const { value, done } = await lines.next();
-      assert.equal(done, false, errors);
-      return JSON.parse(value);
+      for (;;) {
+        const { value, done } = await lines.next();
+        assert.equal(done, false, errors);
+        const message = JSON.parse(value);
+        if (message.method) { notifications.push(message); continue; }
+        return message;
+      }
     }
     try {
       const init = await call("initialize", {
@@ -101,8 +108,18 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
       assert.equal(init.result.serverInfo.title, "Speechmatics Transcribe");
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
       const listed = await call("tools/list", {});
+      const cliManifest = JSON.parse(execFileSync(process.execPath, [...childArgs, "--tool-manifest"], {
+        cwd: directory, env: environment, encoding: "utf8",
+      }));
+      assert.deepEqual(listed.result.tools, cliManifest.tools);
       assert.equal(listed.result.tools[0].name, "transcribe");
       assert.equal(listed.result.tools[0].inputSchema.properties.diarization, undefined);
+      assert.equal(init.result.capabilities.tools.listChanged, true);
+      await writeFile(envFile, "SPEECHMATICS_LANGUAGE=de\n");
+      const refreshed = await call("tools/list", {});
+      assert.match(refreshed.result.tools[0].inputSchema.properties.language.description, /default: de/);
+      assert.equal(notifications.at(-1).method, "notifications/tools/list_changed");
+      await writeFile(envFile, "SPEECHMATICS_LANGUAGE=en\n");
       const failed = await call("tools/call", { name: "transcribe", arguments: { file: input } });
       assert.equal(failed.result.isError, true);
       assert.match(failed.result.content[0].text, /SPEECHMATICS_TOKENS/);
@@ -111,10 +128,12 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
       assert.equal(recovered.result.structuredContent.jobId, "synthetic-job");
       const crashed = await call("tools/call", { name: "transcribe", arguments: { file: input } });
       assert.equal(crashed.result.isError, true);
-      assert.match(crashed.result.content[0].text, /Worker exited with 7/);
+      assert.match(crashed.result.content[0].text, /CLI process exited with 7/);
       const retry = await call("tools/call", { name: "transcribe", arguments: { file: input, disableDiarization: true } });
       assert.equal(retry.result.structuredContent.jobId, "synthetic-job");
-      assert.equal((await readFile(join(directory, "workers.log"), "utf8")).trim().split("\n").length, 4);
+      const unknown = await call("tools/call", { name: "new-cli-tool", arguments: {} });
+      assert.match(unknown.result.content[0].text, /Unknown tool: new-cli-tool/);
+      assert.equal((await readFile(join(directory, "workers.log"), "utf8")).trim().split("\n").length, 5);
     } finally {
       const closed = new Promise((done) => child.once("close", done));
       child.stdin.end();
@@ -132,7 +151,7 @@ test("worker validates protocol, tool names, and arguments without starting MCP"
     [{ protocol: 1, name: "constructor", arguments: {} }, /Unknown tool/],
     [{ protocol: 1, name: "transcribe", arguments: {} }, /file/],
   ]) {
-    const output = execFileSync(process.execPath, ["cli.js", "--worker"], {
+    const output = execFileSync(process.execPath, ["cli.js", "--execute-tool"], {
       input: JSON.stringify(request), encoding: "utf8",
     });
     const response = JSON.parse(output);
@@ -149,16 +168,16 @@ test("Windows launcher passes the fixed npx command through a cmd shim", {
   try {
     await writeFile(join(directory, "npx.cmd"), [
       "@echo off",
-      'if not "%*"=="-y --prefer-online mcp-speechmatics-transcribe@latest --worker" exit /b 8',
-      `"${process.execPath}" "${join(root, "cli.js")}" --worker`,
+      'if not "%*"=="-y --prefer-online mcp-speechmatics-transcribe@latest --execute-tool" exit /b 8',
+      `"${process.execPath}" "${join(root, "cli.js")}" --execute-tool`,
       "",
     ].join("\r\n"));
     const environment = { ...process.env };
     const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path");
     environment[pathKey] = directory + ";" + environment[pathKey];
     const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
-      import { runWorker } from ${JSON.stringify(pathToFileURL(join(root, "modules/worker.js")).href)};
-      console.log(JSON.stringify(await runWorker("unknown-tool", {})));
+      import { runCli } from ${JSON.stringify(pathToFileURL(join(root, "modules/cli-process.js")).href)};
+      console.log(JSON.stringify(await runCli("--execute-tool", { protocol: 1, name: "unknown-tool", arguments: {} })));
     `], { env: environment, encoding: "utf8" });
     const response = JSON.parse(output);
     assert.equal(response.isError, true);

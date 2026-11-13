@@ -11,6 +11,8 @@ const program = new Command()
   .version(version)
   .description("Transcribe audio and video files to JSON, WebVTT, and Markdown.")
   .option("--env-file <path>", "Load an explicit .env file (also supported through SPEECHMATICS_ENV_FILE)")
+  .option("--tool-manifest", "Print tool names, descriptions, and JSON Schemas as JSON")
+  .option("--execute-tool", "Execute a JSON tool request read from stdin")
   .argument("[file]", "Path to an audio or video file")
   .addOption(new Option("--model <model>", `Model (default: ${defaults.model})`).choices(optionFields.model.options))
   .option("--language <code>", `Language (default: ${defaults.language}); use multi with multilingual models`)
@@ -25,7 +27,17 @@ const program = new Command()
     const { envFile } = program.opts();
     if (envFile) process.env.SPEECHMATICS_ENV_FILE = resolve(envFile);
   })
-  .action(async (file, { envFile, ...options }) => {
+  .action(async (file, { envFile, toolManifest, executeTool, ...options }) => {
+    if (toolManifest) {
+      const { getToolManifest } = await import("./modules/tools.js");
+      console.log(JSON.stringify(await getToolManifest()));
+      return;
+    }
+    if (executeTool) {
+      const { serveExecution } = await import("./modules/cli-protocol.js");
+      await serveExecution();
+      return;
+    }
     if (!file) {
       await import("./mcp.js");
       return;
@@ -43,8 +55,8 @@ program.command("mcp")
   .action(async () => { await import("./mcp.js"); });
 
 if (process.argv.length === 3 && process.argv[2] === "--worker") {
-  const { serveWorker } = await import("./modules/worker.js");
-  await serveWorker();
+  const { serveExecution } = await import("./modules/cli-protocol.js");
+  await serveExecution();
 } else {
   await program.parseAsync();
 }

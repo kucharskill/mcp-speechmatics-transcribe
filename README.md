@@ -40,19 +40,39 @@ Logins are optional. Keep credentials outside the repository.
 On Windows, clients that require an executable path can use npx.cmd.
 For a local env file, append --env-file and its absolute path.
 With no file argument, the command starts the MCP server; the explicit mcp subcommand
-remains supported. Each tool call starts a separate worker through
-npx -y --prefer-online mcp-speechmatics-transcribe@latest --worker. npm checks latest
-and reuses cached packages. The running server keeps its tool definitions until
-restarted, while each new worker uses the version resolved for that call. In-flight
-calls continue with their starting version. The worker inherits the environment
-and selected env-file path; tool arguments travel over stdin. npm startup or network
-failures are returned as tool errors without stopping the MCP server.
+remains supported. MCP is a thin adapter: it obtains tool definitions from the CLI
+at startup and on every tools/list request, then forwards each tools/call to a
+separate CLI process. Both discovery and execution run through
+npx -y --prefer-online mcp-speechmatics-transcribe@latest, reusing npm's cache.
+Changes detected during discovery emit notifications/tools/list_changed. Clients
+must request the tool list to discover updates; no background polling is performed.
+In-flight calls continue with their starting version. The CLI inherits the
+environment and selected env-file path; execution arguments travel over stdin.
+CLI startup or network failures are reported without stopping an established MCP
+connection. Startup discovery must succeed before the MCP connection is initialized.
 Allow enough tool time for npm startup,
 uploads and processing; the built-in API timeout is 900 seconds.
 
 The transcribe tool requires an absolute file path. Optional parameters are model,
 language, disableDiarization, audioEvents, convertToMp3, and timeoutSeconds.
 Missing credentials are reported when the tool is called; tool discovery remains available.
+
+## Machine-readable CLI
+
+`--tool-manifest` prints a JSON document containing `protocol: 1`,
+`serverInfo`, and `tools` with MCP-compatible names, descriptions, and JSON Schemas.
+It does not require API credentials. `--execute-tool` reads one JSON request from
+stdin and prints one MCP-compatible tool result to stdout:
+
+```json
+{"protocol":1,"name":"transcribe","arguments":{"file":"/path/to/recording.mp3"}}
+```
+
+Execution validates arguments against the same definitions used by the manifest.
+Tool failures return `isError: true` and text content. Human-facing file commands
+retain their existing output and exit-code behavior. Internal `--worker` remains
+an alias for execution. CLI and MCP are distributed together in the same package;
+the adapter contains no transcription-specific schemas or execution logic.
 
 ## Configuration
 

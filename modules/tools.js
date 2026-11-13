@@ -2,6 +2,7 @@ import { z } from "zod";
 import { optionFields } from "./options.js";
 import { transcribe } from "./transcribe.js";
 import { loadConfig } from "./config.js";
+import { readFile } from "node:fs/promises";
 
 export const description = "Transcribe local audio and video files through the Speechmatics Batch API.";
 
@@ -42,4 +43,18 @@ export async function executeTool(name, args) {
   if (!Object.hasOwn(tools, name)) throw new Error("Unknown tool: " + name);
   const tool = tools[name];
   return tool.execute(tool.definition.inputSchema.parse(args));
+}
+
+export async function getToolManifest() {
+  const { options } = await loadConfig({}, { requireTokens: false });
+  const { name, version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  return {
+    protocol: 1,
+    serverInfo: { name, version, title: "Speechmatics Transcribe", description },
+    tools: Object.entries(createTools(options)).map(([toolName, { definition }]) => ({
+      ...definition,
+      name: toolName,
+      inputSchema: z.toJSONSchema(definition.inputSchema, { target: "draft-7" }),
+    })),
+  };
 }
