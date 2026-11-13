@@ -8,6 +8,10 @@
 - Klucze są w zmiennej `SPEECHMATICS_TOKENS` w formacie `login:token,token,:token`. Login jest opcjonalny, token musi być niepusty. Pierwszy dwukropek rozdziela login od tokena, a przecinki rozdzielają wpisy. Zmienna jest wymagana. Plik `.env` zawiera sekrety i jest ignorowany przez Git. Wspólny log `%TEMP%\transcription\logs.json` przechowuje SHA-256 użytego tokena, stan i czas wykonania oraz ewentualny błąd. Rotacja pomija tokeny wykluczone po błędzie autoryzacji, uprawnień lub wyczerpaniu limitu konta.
 - Wykrywanie zdarzeń dźwiękowych jest domyślnie włączone dla modeli Standard i Enhanced. Do Markdown i WebVTT trafiają zdarzenia z pewnością co najmniej 0,90. `laughter`, `music` i `applause` mają polskie etykiety, a pozostałe typy zachowują nazwę z API. Wyłączenie przez `--no-audio-events` w CLI lub `audioEvents: false` w MCP albo w ustawieniach domyślnych.
 
+## GitHub language
+
+Use English for all content published to GitHub, including source code strings, comments, documentation, configuration examples, filenames, commit messages, pull requests, and issues. Review changes for Polish text before publishing.
+
 ## Git
 
 Repozytorium Git służy agentowi do prowadzenia historii pracy nad projektem. Agent odpowiada za jej aktualność i zapisuje trwałe zmiany w commicie po każdym zakończonym etapie pracy, zgodnie z globalnymi zasadami Git.
