@@ -32,7 +32,7 @@ export function parseTokens(source) {
 export async function loadConfig(overrides = {}, { requireTokens = true } = {}) {
   const environment = { ...process.env };
   const loaded = dotenv.config({
-    path: fileURLToPath(new URL("./.env", import.meta.url)),
+    path: fileURLToPath(new URL("../.env", import.meta.url)),
     processEnv: environment,
     quiet: true,
   });

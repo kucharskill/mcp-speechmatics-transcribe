@@ -1,6 +1,6 @@
 import { Command, Option } from "commander";
-import { defaults, optionFields } from "./options.js";
-import { transcribe } from "./transcribe.js";
+import { defaults, optionFields } from "./modules/options.js";
+import { transcribe } from "./modules/transcribe.js";
 
 const program = new Command()
   .name("speechmatics")

@@ -1,9 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
-import { optionFields } from "./options.js";
-import { loadConfig } from "./config.js";
-import { transcribe } from "./transcribe.js";
+import { optionFields } from "./modules/options.js";
+import { loadConfig } from "./modules/config.js";
+import { transcribe } from "./modules/transcribe.js";
 
 const { options: configuredDefaults } = await loadConfig({}, { requireTokens: false });
 
