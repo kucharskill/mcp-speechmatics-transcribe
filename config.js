@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import { z } from "zod";
@@ -39,15 +38,10 @@ export async function loadConfig(overrides = {}) {
   });
   if (loaded.error && loaded.error.code !== "ENOENT") throw loaded.error;
 
-  // Preserve compatibility with installations using settings.json.
-  const settingsSource = await readFile(new URL("./settings.json", import.meta.url), "utf8").catch((error) => {
-    if (error.code === "ENOENT") return "{}";
-    throw error;
-  });
-  const settings = JSON.parse(settingsSource.replace(/^\uFEFF/, ""));
-  const tokens = environment.SPEECHMATICS_TOKENS === undefined
-    ? tokenSchema.parse(settings.tokens)
-    : parseTokens(environment.SPEECHMATICS_TOKENS);
+  if (environment.SPEECHMATICS_TOKENS === undefined) {
+    throw new Error("Ustaw SPEECHMATICS_TOKENS w środowisku procesu lub projektowym .env.");
+  }
+  const tokens = parseTokens(environment.SPEECHMATICS_TOKENS);
   const env = environmentSchema.parse(environment);
   const environmentOptions = {
     model: env.SPEECHMATICS_MODEL,
@@ -59,7 +53,7 @@ export async function loadConfig(overrides = {}) {
   };
   const defined = (values) => Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined));
   const options = optionsSchema.parse({
-    ...defaults, ...settings.defaults, ...defined(environmentOptions), ...defined(overrides),
+    ...defaults, ...defined(environmentOptions), ...defined(overrides),
   });
   return { tokens, options };
 }
