@@ -1,21 +1,25 @@
 # Speechmatics Tools
 
-- Projekt Node.js (ESM, Node.js >=22.12) do transkrypcji wsadowej lokalnych plików audio i wideo przez Speechmatics Batch API v2 w regionie EU1.
-- CLI korzysta z Commandera. Pomoc jest dostępna przez `node cli.js --help`. Lokalny serwer MCP uruchamia się przez `node mcp.js` i udostępnia narzędzie `transcribe` przez stdio.
-- W MCP agent może wyłączyć diarizację przez `disableDiarization: true`. Pominięcie flagi albo `false` stosuje ustawienie serwera. Tryb diarizacji wybiera się przez CLI lub ustawienia lokalne.
-- CLI i MCP korzystają ze wspólnej funkcji w `modules/transcribe.js`. Domyślne ustawienia w `modules/options.js` to model `enhanced`, język `pl`, diarizacja `speaker`, limit oczekiwania na API 900 sekund i wyłączona konwersja MP3. Konfigurację wczytuje `modules/config.js` przez dotenv i waliduje Zod. Pierwszeństwo mają argumenty wywołania, środowisko procesu, projektowy `.env`, a następnie wartości wbudowane. Wzór zmiennych zawiera `.env.example`.
-- Wyniki trafiają do `%TEMP%\transcription\<nazwa pliku>\` jako surowy `json-v2`, JSON segmentów, napisy WebVTT ze znacznikiem `<v.speaker S1>` i Markdown. Markdown ma H1 z nazwą pliku, H2 z nazwą folderu źródłowego i zwykłe akapity z mówcą oraz czasem początku. Tylko etykiety pasujące do `^S[0-9]+$` są wyświetlane jako `Rozmówca <liczba>`. Opcjonalna konwersja korzysta z FFmpeg w PATH. Kopiuje ścieżkę audio, jeśli jest już w formacie MP3, a w przeciwnym razie ją koduje.
-- Klucze są w zmiennej `SPEECHMATICS_TOKENS` w formacie `login:token,token,:token`. Login jest opcjonalny, token musi być niepusty. Pierwszy dwukropek rozdziela login od tokena, a przecinki rozdzielają wpisy. Zmienna jest wymagana. Plik `.env` zawiera sekrety i jest ignorowany przez Git. Wspólny log `%TEMP%\transcription\logs.json` przechowuje SHA-256 użytego tokena, stan i czas wykonania oraz ewentualny błąd. Rotacja pomija tokeny wykluczone po błędzie autoryzacji, uprawnień lub wyczerpaniu limitu konta.
-- Wykrywanie zdarzeń dźwiękowych jest domyślnie włączone dla modeli Standard i Enhanced. Do Markdown i WebVTT trafiają zdarzenia z pewnością co najmniej 0,90. `laughter`, `music` i `applause` mają polskie etykiety, a pozostałe typy zachowują nazwę z API. Wyłączenie przez `--no-audio-events` w CLI lub `audioEvents: false` w MCP albo w ustawieniach domyślnych.
+- Node.js project using ESM and Node.js >=22.12 for batch transcription of local audio and video files through the Speechmatics Batch API v2 in EU1.
+- The CLI uses Commander. Run `node cli.js --help` for usage. Run `node mcp.js` to expose the `transcribe` tool over stdio.
+- MCP supports `disableDiarization: true` to disable speaker diarization. Omitting this option or passing false uses the server setting. The diarization mode is configured through the CLI or local environment.
+- Both interfaces use `modules/transcribe.js`. Built-in defaults in `modules/options.js` are enhanced, pl, speaker diarization, a 900-second API timeout, and MP3 conversion disabled. Configuration is loaded by dotenv and validated by Zod in `modules/config.js`. Precedence is invocation arguments, process environment, project .env, and built-in defaults. See `.env.example` for supported variables.
+- Output files are written to `%TEMP%\transcription\<input filename>\` as raw json-v2, segment JSON, WebVTT, and Markdown. WebVTT uses voice spans such as `<v.speaker S1>`. Markdown uses the filename as H1, the source folder as H2, and paragraphs prefixed with speaker labels and start times. Labels matching `^S[0-9]+$` receive a localized speaker label. Paragraphs split at sentence boundaries after 30 seconds or 80 words, or immediately when the speaker changes.
+- Optional MP3 conversion uses FFmpeg from PATH. Existing MP3 audio streams are copied when possible; other audio is encoded.
+- `SPEECHMATICS_TOKENS` is required for transcription and accepts `login:token,token,:token`. Logins are optional and tokens must be nonempty. The first colon separates login from token; commas separate entries. The local .env contains secrets and is ignored by Git. MCP can list tools without tokens and reports missing credentials when transcription is called.
+- `%TEMP%\transcription\logs.json` records token SHA-256, execution status, duration, and errors. Rotation skips tokens disabled after authentication, entitlement, or exhausted-account-limit errors.
+- Audio events are enabled by default for Standard and Enhanced. Markdown and WebVTT include events with confidence >=0.90. Known event types receive localized labels; other types retain the API value. Disable events with `--no-audio-events` or `audioEvents: false`.
 
-## GitHub language
+## GitHub content
 
 Use English for all content published to GitHub, including source code strings, comments, documentation, configuration examples, filenames, commit messages, pull requests, and issues. Review changes for Polish text before publishing.
 
+Public content must describe the software and its behavior without references to AI-assisted development, coding assistants, chat sessions, or conversation history. Keep implementation notes and change descriptions focused on the technical result.
+
 ## Git
 
-Repozytorium Git służy agentowi do prowadzenia historii pracy nad projektem. Agent odpowiada za jej aktualność i zapisuje trwałe zmiany w commicie po każdym zakończonym etapie pracy, zgodnie z globalnymi zasadami Git.
+Maintain an up-to-date project history by committing completed changes in logical increments, following the global Git rules. Preserve existing commit history.
 
-## Pytania i decyzje
+## Questions and decisions
 
-Gdy użytkownik pyta o podejście, format, wariant albo prosi o opinię, odpowiedz zwięźle i przedstaw propozycję. Poczekaj z wdrożeniem na akceptację albo wyraźne polecenie. Jeśli wiadomość łączy polecenie z pytaniem o szczegół, wykonaj niezależną część polecenia, a szczegół pozostaw do decyzji.
+Answer questions about approaches, formats, or alternatives with a concise proposal. Implement after acceptance or an explicit instruction. When a request combines an implementation instruction with an unresolved design question, complete the independent work and leave that design choice for confirmation.
