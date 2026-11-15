@@ -5,6 +5,7 @@ import { resolve, join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
 import { test } from "node:test";
+import { createHash } from "node:crypto";
 import { parseTokens } from "../modules/config.js";
 import { buildMarkdown } from "../modules/markdown.js";
 import { selectAudioEvents } from "../modules/audio-events.js";
@@ -14,6 +15,68 @@ test("token entries support optional logins and reject empty tokens", () => {
     { login: "user", token: "key:part" }, { token: "bare" }, { login: "", token: "third" },
   ]);
   for (const entry of ["", "user:", "one,,two"]) assert.throws(() => parseTokens(entry), /empty token/);
+});
+
+test("token status skips exclusions, masks anonymous keys, and preserves raw usage", async () => {
+  await mkdir(".tmp", { recursive: true });
+  const root = resolve(".");
+  const directory = await mkdtemp(join(root, ".tmp", "token-status-"));
+  const envFile = join(directory, ".env");
+  const mock = join(directory, "mock.mjs");
+  const excludedToken = "synthetic-excluded";
+  const log = JSON.stringify([{
+    tokenSha256: createHash("sha256").update(excludedToken).digest("hex"), tokenDisabled: true,
+  }]);
+  const summary = [{ mode: "batch", type: "transcription", model: "enhanced", language: "en", count: 2, duration_hrs: 1.25 }];
+  const usage = { since: "2026-01-01", until: "2026-01-31", summary, details: [] };
+  const env = { ...process.env, TEMP: directory, TMP: directory, TMPDIR: directory };
+  for (const key of Object.keys(env)) if (key.startsWith("SPEECHMATICS_")) delete env[key];
+  await mkdir(join(directory, "transcription"));
+  await writeFile(join(directory, "transcription", "logs.json"), log);
+  await writeFile(envFile, "SPEECHMATICS_TOKENS=account:synthetic-active,synthetic-anonymous,skip:synthetic-excluded,:tiny\n");
+  await writeFile(mock, `
+    import assert from "node:assert/strict";
+    let calls = 0;
+    globalThis.fetch = async (url, init) => {
+      assert.equal(init.method, "GET");
+      const endpoint = new URL(url);
+      assert.equal(endpoint.pathname, "/v2/usage");
+      assert.equal(endpoint.searchParams.get("since"), "2026-01-01");
+      assert.equal(endpoint.searchParams.get("until"), "2026-01-31");
+      assert.notEqual(init.headers.Authorization, "Bearer synthetic-excluded");
+      calls++;
+      if (init.headers.Authorization === "Bearer synthetic-anonymous") {
+        return Response.json({ error: "synthetic-anonymous rejected" }, { status: 401 });
+      }
+      return Response.json(${JSON.stringify(usage)});
+    };
+    process.on("exit", () => assert.equal(calls, 3));
+  `);
+  try {
+    const output = execFileSync(process.execPath, [
+      "--import", pathToFileURL(mock).href, "cli.js", "--env-file", envFile, "--execute-tool",
+    ], {
+      env, encoding: "utf8",
+      input: JSON.stringify({ protocol: 1, name: "token_status", arguments: { since: "2026-01-01", until: "2026-01-31" } }),
+    });
+    const result = JSON.parse(output);
+    assert.deepEqual(result.structuredContent.tokens, [
+      { login: "account", status: "active", usage },
+      { token: "synt****mous", status: "error", error: { message: "Speechmatics HTTP 401: [token] rejected", httpStatus: 401 } },
+      { login: "skip", status: "excluded" },
+      { token: "****", status: "active", usage },
+    ]);
+    assert.ok(!output.includes("credits") && !output.includes("tokenSha256"));
+    assert.equal(await readFile(join(directory, "transcription", "logs.json"), "utf8"), log);
+    const failed = JSON.parse(execFileSync(process.execPath, ["cli.js", "--env-file", envFile, "--execute-tool"], {
+      env, encoding: "utf8",
+      input: JSON.stringify({ protocol: 1, name: "token_status", arguments: { since: "2026-02-31" } }),
+    }));
+    assert.equal(failed.isError, true);
+  } finally {
+    assert.equal(dirname(directory), join(root, ".tmp"));
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("CLI and MCP use an explicit env file and export a mocked transcription", { timeout: 20000 }, async () => {
@@ -112,6 +175,7 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
       }));
       assert.deepEqual(listed.result.tools, cliManifest.tools);
       assert.equal(listed.result.tools[0].name, "transcribe");
+      assert.equal(listed.result.tools[1].name, "token_status");
       assert.equal(listed.result.tools[0].inputSchema.properties.diarization, undefined);
       assert.equal(init.result.capabilities.tools.listChanged, true);
       await writeFile(envFile, "SPEECHMATICS_LANGUAGE=de\n");

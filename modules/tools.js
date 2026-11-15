@@ -3,6 +3,7 @@ import { optionFields } from "./options.js";
 import { transcribe } from "./transcribe.js";
 import { loadConfig } from "./config.js";
 import { readFile } from "node:fs/promises";
+import { tokenStatus } from "./token-status.js";
 
 export const description = "Transcribe local audio and video files through the Speechmatics Batch API.";
 
@@ -31,6 +32,24 @@ export function createTools(configuredDefaults) {
         } catch (error) {
           const result = error.result ?? { message: error.message };
           return { isError: true, content: [{ type: "text", text: JSON.stringify(result) }] };
+        }
+      },
+    },
+    token_status: {
+      definition: {
+        description: "Check configured tokens and read Batch usage from Speechmatics. Excluded tokens are reported without API requests. Identity is the configured login or a masked token. API access does not guarantee funds for transcription. Usage is returned in the API's scope, not attributed exclusively to a key. This read-only check does not change rotation, exclusions, or logs.",
+        inputSchema: z.strictObject({
+          since: z.iso.date().optional().describe("Inclusive start date YYYY-MM-DD. Defaults to the first day of the current UTC month."),
+          until: z.iso.date().optional().describe("Inclusive end date YYYY-MM-DD. Omit to use the API's current end date."),
+        }),
+        annotations: { readOnlyHint: true },
+      },
+      execute: async (options) => {
+        try {
+          const result = await tokenStatus(options);
+          return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
+        } catch (error) {
+          return { isError: true, content: [{ type: "text", text: JSON.stringify({ message: error.message }) }] };
         }
       },
     },

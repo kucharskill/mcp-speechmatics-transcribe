@@ -65,6 +65,12 @@ export async function submitJob(file, token, options, signal) {
   return id;
 }
 
+export function getUsage(token, since, until, signal) {
+  const query = new URLSearchParams({ since });
+  if (until) query.set("until", until);
+  return request("/v2/usage?" + query, token, signal);
+}
+
 export async function getTranscript(id, token, signal) {
   const jobPath = `/v2/jobs/${encodeURIComponent(id)}`;
   while (!signal.aborted) {

@@ -78,6 +78,19 @@ the adapter contains no transcription-specific schemas or execution logic.
 
 ## Configuration
 
+The read-only `token_status` tool checks all configured tokens through the EU1
+Batch usage endpoint. Optional `since` and `until` dates use YYYY-MM-DD; the default
+start is the first day of the current UTC month. Results identify each key by its
+configured login or a masked token. Excluded keys return `excluded` without an API
+request. Successful requests return `active` and the API's usage fields directly;
+failures return `error` with available HTTP details. Short anonymous tokens are fully
+masked. No raw token or token hash is returned.
+
+Usage reflects the scope reported by Speechmatics and is not attributed exclusively
+to an individual key. Successful access does not guarantee funds for another job.
+Credits are omitted because the public usage API does not provide a balance.
+Status checks do not update logs, rotation, or exclusions.
+
 Invocation arguments override process environment, followed by the selected env file
 and built-in defaults. SPEECHMATICS_ENV_FILE or --env-file selects an env file.
 Source installations otherwise load .env from the package directory.

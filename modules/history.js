@@ -7,6 +7,16 @@ import lockfile from "proper-lockfile";
 export const outputRoot = join(tmpdir(), "transcription");
 export const logPath = join(outputRoot, "logs.json");
 
+export async function readLog() {
+  const source = await readFile(logPath, "utf8").catch((error) => {
+    if (error.code === "ENOENT") return "[]";
+    throw error;
+  });
+  const entries = JSON.parse(source);
+  if (!Array.isArray(entries)) throw new Error("logs.json must contain an array of records.");
+  return entries;
+}
+
 async function updateLog(update) {
   await mkdir(outputRoot, { recursive: true });
   const release = await lockfile.lock(logPath, {
@@ -14,12 +24,7 @@ async function updateLog(update) {
     retries: { retries: 60, minTimeout: 100, maxTimeout: 250 },
   });
   try {
-    const source = await readFile(logPath, "utf8").catch((error) => {
-      if (error.code === "ENOENT") return "[]";
-      throw error;
-    });
-    const entries = JSON.parse(source);
-    if (!Array.isArray(entries)) throw new Error("logs.json must contain an array of records.");
+    const entries = await readLog();
     const result = update(entries);
     const temporaryPath = join(outputRoot, `logs-${randomUUID()}.tmp`);
     try {
