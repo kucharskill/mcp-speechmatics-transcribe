@@ -42,8 +42,10 @@ For a local env file, append --env-file and its absolute path.
 With no file argument, the command starts the MCP server; the explicit mcp subcommand
 remains supported. MCP is a thin adapter: it obtains tool definitions from the CLI
 at startup and on every tools/list request, then forwards each tools/call to a
-separate CLI process. Both discovery and execution run through
-npx -y --prefer-online mcp-speechmatics-transcribe@latest, reusing npm's cache.
+separate CLI process. An npx-managed installation resolves the latest published CLI
+through npx, reusing npm's cache. Local launches, including npm scripts, use the CLI
+from the same installation through the current Node.js executable. Ambiguous
+launches use the same-installation CLI.
 Changes detected during discovery emit notifications/tools/list_changed. Clients
 must request the tool list to discover updates; no background polling is performed.
 In-flight calls continue with their starting version. The CLI inherits the
@@ -139,7 +141,7 @@ match the package version. npm publishing uses GitHub OIDC after a trusted
 publisher is configured for this repository and release.yml.
 
 For the first publication, authenticate with npm login and publish the checked archive
-from work/releases/ using npm publish with --access public.
+from .tmp/releases/ using npm publish with --access public.
 The release workflow publishes stable versions under latest and prereleases under next.
 
 ## License

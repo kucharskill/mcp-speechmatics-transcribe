@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 const pkg = JSON.parse(await readFile("package.json", "utf8"));
-const destination = "work/releases";
+const destination = ".tmp/releases";
 await mkdir(destination, { recursive: true });
 const packedResult = JSON.parse(execFileSync(process.execPath, [
   process.env.npm_execpath, "pack", "--json", "--ignore-scripts", "--pack-destination", destination,

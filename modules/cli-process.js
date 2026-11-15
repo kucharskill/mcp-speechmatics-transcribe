@@ -6,14 +6,24 @@ import { fileURLToPath } from "node:url";
 export function runCli(mode, request) {
   return new Promise((done, reject) => {
     if (!["--tool-manifest", "--execute-tool"].includes(mode)) throw new Error("Unsupported CLI mode.");
-    const launchArgs = ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", mode];
-    const windows = process.platform === "win32";
-    const child = spawn(windows ? "npx " + launchArgs.join(" ") : "npx", windows ? [] : launchArgs, {
-      shell: windows,
+    const modulePath = fileURLToPath(import.meta.url);
+    const cachedPackage = /[\\/]_npx[\\/][^\\/]+[\\/]node_modules[\\/]mcp-speechmatics-transcribe[\\/]/i.test(modulePath);
+    const npmExec = process.env.npm_command === "exec"
+      || (!process.env.npm_command && process.env.npm_lifecycle_event === "npx");
+    const useNpx = cachedPackage && npmExec;
+    const launchArgs = useNpx
+      ? ["-y", "--prefer-online", "--package=mcp-speechmatics-transcribe@latest", "--", "mcp-speechmatics-transcribe", mode]
+      : [fileURLToPath(new URL("../cli.js", import.meta.url)), mode];
+    const windowsShell = useNpx && process.platform === "win32";
+    const environment = Object.fromEntries(Object.entries(process.env)
+      .filter(([key]) => !/^npm_config_(package|call)$/i.test(key)));
+    const command = useNpx ? "npx" : process.execPath;
+    const child = spawn(windowsShell ? command + " " + launchArgs.join(" ") : command, windowsShell ? [] : launchArgs, {
+      shell: windowsShell,
       windowsHide: true,
       stdio: ["pipe", "pipe", "inherit"],
       env: {
-        ...process.env,
+        ...environment,
         SPEECHMATICS_ENV_FILE: process.env.SPEECHMATICS_ENV_FILE
           ? resolve(process.env.SPEECHMATICS_ENV_FILE)
           : fileURLToPath(new URL("../.env", import.meta.url)),

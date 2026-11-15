@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, rm, chmod } from "node:fs/promises";
 import { resolve, join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
@@ -17,9 +17,9 @@ test("token entries support optional logins and reject empty tokens", () => {
 });
 
 test("CLI and MCP use an explicit env file and export a mocked transcription", { timeout: 20000 }, async () => {
-  await mkdir("work", { recursive: true });
+  await mkdir(".tmp", { recursive: true });
   const root = resolve(".");
-  const directory = await mkdtemp(join(root, "work", "check-"));
+  const directory = await mkdtemp(join(root, ".tmp", "check-"));
   const environment = { ...process.env, TEMP: directory, TMP: directory, TMPDIR: directory };
   for (const key of Object.keys(environment)) {
     if (key.startsWith("SPEECHMATICS_")) delete environment[key];
@@ -46,12 +46,11 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
     const originalSpawn = childProcess.spawn;
     let workerCalls = 0;
     childProcess.spawn = (command, args, options) => {
-      if (!command.startsWith("npx")) return originalSpawn(command, args, options);
-      const mode = process.platform === "win32" ? command.split(" ").at(-1) : args.at(-1);
+      if (command !== process.execPath || args[0] !== ${JSON.stringify(join(root, "cli.js"))}) return originalSpawn(command, args, options);
+      const mode = args.at(-1);
       assert.ok(["--tool-manifest", "--execute-tool"].includes(mode));
-      const expected = ["-y", "--prefer-online", "mcp-speechmatics-transcribe@latest", mode];
-      assert.equal(command, process.platform === "win32" ? "npx " + expected.join(" ") : "npx");
-      assert.deepEqual(args, process.platform === "win32" ? [] : expected);
+      assert.equal(options.shell, false);
+      assert.deepEqual(args, [${JSON.stringify(join(root, "cli.js"))}, mode]);
       if (mode === "--execute-tool") appendFileSync(${JSON.stringify(join(directory, "workers.log"))}, "worker\\n");
       if (mode === "--execute-tool" && ++workerCalls === 3) return originalSpawn(process.execPath, ["-e", "process.exit(7)"], { ...options, shell: false });
       return originalSpawn(process.execPath, ["--import", import.meta.url, ${JSON.stringify(join(root, "cli.js"))}, mode], { ...options, shell: false });
@@ -140,7 +139,7 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
       await closed;
     }
   } finally {
-    assert.equal(dirname(directory), join(root, "work"));
+    assert.equal(dirname(directory), join(root, ".tmp"));
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -160,29 +159,83 @@ test("worker validates protocol, tool names, and arguments without starting MCP"
   }
 });
 
-test("Windows launcher passes the fixed npx command through a cmd shim", {
-  skip: process.platform !== "win32",
-}, async () => {
+test("npx installation uses an explicit package and clears inherited npm arguments", async () => {
   const root = resolve(".");
-  const directory = await mkdtemp(join(root, "work", "launcher-"));
+  await mkdir(".tmp", { recursive: true });
+  const directory = await mkdtemp(join(root, ".tmp", "launcher-"));
   try {
-    await writeFile(join(directory, "npx.cmd"), [
+    const shim = join(directory, process.platform === "win32" ? "npx.cmd" : "npx");
+    const expected = "-y --prefer-online --package=mcp-speechmatics-transcribe@latest -- mcp-speechmatics-transcribe --execute-tool";
+    await writeFile(shim, process.platform === "win32" ? [
       "@echo off",
-      'if not "%*"=="-y --prefer-online mcp-speechmatics-transcribe@latest --execute-tool" exit /b 8',
+      'if not "%*"=="-y --prefer-online --package=mcp-speechmatics-transcribe@latest -- mcp-speechmatics-transcribe --execute-tool" exit /b 8',
+      'if defined npm_config_package exit /b 9',
+      'if defined npm_config_call exit /b 10',
       `"${process.execPath}" "${join(root, "cli.js")}" --execute-tool`,
       "",
-    ].join("\r\n"));
+    ].join("\r\n") : [
+      "#!/bin/sh",
+      `[ "$*" = "${expected}" ] || exit 8`,
+      '[ -z "${npm_config_package+x}" ] || exit 9',
+      '[ -z "${npm_config_call+x}" ] || exit 10',
+      `exec "${process.execPath}" "${join(root, "cli.js")}" --execute-tool`,
+      "",
+    ].join("\n"));
+    await chmod(shim, 0o755);
     const environment = { ...process.env };
+    environment.npm_command = "exec";
+    environment.npm_config_package = "other-package";
+    environment.npm_config_call = "other-command";
     const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === "path");
-    environment[pathKey] = directory + ";" + environment[pathKey];
+    environment[pathKey] = directory + (process.platform === "win32" ? ";" : ":") + environment[pathKey];
+    const installation = join(directory, "_npx", "synthetic", "node_modules", "mcp-speechmatics-transcribe", "modules");
+    await mkdir(installation, { recursive: true });
+    await writeFile(join(installation, "cli-process.js"), await readFile("modules/cli-process.js", "utf8"));
     const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
-      import { runCli } from ${JSON.stringify(pathToFileURL(join(root, "modules/cli-process.js")).href)};
+      import { runCli } from ${JSON.stringify(pathToFileURL(join(installation, "cli-process.js")).href)};
       console.log(JSON.stringify(await runCli("--execute-tool", { protocol: 1, name: "unknown-tool", arguments: {} })));
     `], { env: environment, encoding: "utf8" });
     const response = JSON.parse(output);
     assert.equal(response.isError, true);
     assert.match(response.content[0].text, /Unknown tool/);
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("local and ambiguous launches use the CLI from the same installation", async () => {
+  const root = resolve(".");
+  await mkdir(".tmp", { recursive: true });
+  const directory = await mkdtemp(join(root, ".tmp", "local launcher "));
+  try {
+    for (const cached of [false, true]) {
+      const installation = cached
+        ? join(directory, "_npx", "synthetic", "node_modules", "mcp-speechmatics-transcribe")
+        : join(directory, "source checkout");
+      await mkdir(join(installation, "modules"), { recursive: true });
+      await writeFile(join(installation, "modules", "cli-process.js"), await readFile("modules/cli-process.js", "utf8"));
+      await writeFile(join(installation, "cli.js"), `
+        import assert from "node:assert/strict";
+        assert.equal(process.env.npm_config_package, undefined);
+        assert.equal(process.env.npm_config_call, undefined);
+        assert.equal(process.env.SPEECHMATICS_TOKENS, "synthetic-token");
+        console.log(JSON.stringify({ content: [{ type: "text", text: "same-installation" }] }));
+      `);
+      for (const npmCommand of cached ? ["", "run-script"] : ["", "exec", "run-script"]) {
+        const environment = { ...process.env, SPEECHMATICS_TOKENS: "synthetic-token",
+          npm_config_package: "inherited-package", npm_config_call: "inherited-command" };
+        delete environment.npm_command;
+        delete environment.npm_lifecycle_event;
+        if (npmCommand) environment.npm_command = npmCommand;
+        const output = execFileSync(process.execPath, ["--input-type=module", "-e", `
+          import { runCli } from ${JSON.stringify(pathToFileURL(join(installation, "modules", "cli-process.js")).href)};
+          console.log(JSON.stringify(await runCli("--execute-tool", {})));
+        `], { env: environment, encoding: "utf8" });
+        assert.equal(JSON.parse(output).content[0].text, "same-installation");
+      }
+    }
+  } finally {
+    assert.equal(dirname(directory), join(root, ".tmp"));
     await rm(directory, { recursive: true, force: true });
   }
 });
