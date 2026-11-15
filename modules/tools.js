@@ -40,7 +40,7 @@ export function createTools(configuredDefaults) {
         description: "Check configured tokens and read Batch usage from Speechmatics. Excluded tokens are reported without API requests. Identity is the configured login or a masked token. API access does not guarantee funds for transcription. Usage is returned in the API's scope, not attributed exclusively to a key. This read-only check does not change rotation, exclusions, or logs.",
         inputSchema: z.strictObject({
           since: z.iso.date().optional().describe("Inclusive start date YYYY-MM-DD. Defaults to the first day of the current UTC month."),
-          until: z.iso.date().optional().describe("Inclusive end date YYYY-MM-DD. Omit to use the API's current end date."),
+          until: z.iso.date().optional().describe("Inclusive end date YYYY-MM-DD. Defaults explicitly to today in UTC, including the current day's usage."),
         }),
         annotations: { readOnlyHint: true },
       },

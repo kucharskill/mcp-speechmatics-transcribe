@@ -41,8 +41,9 @@ test("token status skips exclusions, masks anonymous keys, and preserves raw usa
       assert.equal(init.method, "GET");
       const endpoint = new URL(url);
       assert.equal(endpoint.pathname, "/v2/usage");
-      assert.equal(endpoint.searchParams.get("since"), "2026-01-01");
-      assert.equal(endpoint.searchParams.get("until"), "2026-01-31");
+      const today = new Date().toISOString().slice(0, 10);
+      assert.equal(endpoint.searchParams.get("since"), process.env.STATUS_DEFAULT_DATES ? today.slice(0, 7) + "-01" : "2026-01-01");
+      assert.equal(endpoint.searchParams.get("until"), process.env.STATUS_DEFAULT_DATES ? today : "2026-01-31");
       assert.notEqual(init.headers.Authorization, "Bearer synthetic-excluded");
       calls++;
       if (init.headers.Authorization === "Bearer synthetic-anonymous") {
@@ -68,6 +69,13 @@ test("token status skips exclusions, masks anonymous keys, and preserves raw usa
     ]);
     assert.ok(!output.includes("credits") && !output.includes("tokenSha256"));
     assert.equal(await readFile(join(directory, "transcription", "logs.json"), "utf8"), log);
+    const defaultDates = JSON.parse(execFileSync(process.execPath, [
+      "--import", pathToFileURL(mock).href, "cli.js", "--env-file", envFile, "--execute-tool",
+    ], {
+      env: { ...env, STATUS_DEFAULT_DATES: "1" }, encoding: "utf8",
+      input: JSON.stringify({ protocol: 1, name: "token_status", arguments: {} }),
+    }));
+    assert.equal(defaultDates.structuredContent.tokens[0].status, "active");
     const failed = JSON.parse(execFileSync(process.execPath, ["cli.js", "--env-file", envFile, "--execute-tool"], {
       env, encoding: "utf8",
       input: JSON.stringify({ protocol: 1, name: "token_status", arguments: { since: "2026-02-31" } }),

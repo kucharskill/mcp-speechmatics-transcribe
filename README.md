@@ -80,7 +80,8 @@ the adapter contains no transcription-specific schemas or execution logic.
 
 The read-only `token_status` tool checks all configured tokens through the EU1
 Batch usage endpoint. Optional `since` and `until` dates use YYYY-MM-DD; the default
-start is the first day of the current UTC month. Results identify each key by its
+start is the first day of the current UTC month and the default end is today in UTC,
+explicitly including the current day's usage. Results identify each key by its
 configured login or a masked token. Excluded keys return `excluded` without an API
 request. Successful requests return `active` and the API's usage fields directly;
 failures return `error` with available HTTP details. Short anonymous tokens are fully

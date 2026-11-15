@@ -3,8 +3,11 @@ import { loadConfig } from "./config.js";
 import { readLog } from "./history.js";
 import { ApiError, getUsage } from "./speechmatics.js";
 
-export async function tokenStatus({ since = new Date().toISOString().slice(0, 7) + "-01", until } = {}) {
-  if (until && until < since) throw new Error("until must be on or after since.");
+export async function tokenStatus({ since, until } = {}) {
+  const today = new Date().toISOString().slice(0, 10);
+  since ??= today.slice(0, 7) + "-01";
+  until ??= today;
+  if (until < since) throw new Error("until must be on or after since.");
   const { tokens } = await loadConfig();
   const excluded = new Set((await readLog())
     .filter((entry) => entry.tokenDisabled)
