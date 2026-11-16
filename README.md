@@ -134,7 +134,8 @@ the existing output format. Unknown speaker labels and event types are preserved
 Audio events appear in Markdown and WebVTT at confidence >=0.90.
 
 The shared transcription/logs.json records status, elapsed time, job ID, and
-token SHA-256. Token rotation skips credentials disabled after authentication,
+token SHA-256. Tokens are selected in round-robin order across transcription
+requests. Token rotation skips credentials disabled after authentication,
 entitlement, or exhausted-account-limit errors. HTTP 429 rate limits alone do not
 disable a token. API errors are returned to the caller.
 
