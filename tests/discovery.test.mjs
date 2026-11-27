@@ -7,6 +7,8 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createDiscoveryCache, discoveryKey } from "../modules/discovery-cache.js";
 import { runCli, dumpStartupEnvironment } from "../modules/cli-process.js";
+import { Client } from "@modelcontextprotocol/client";
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
 test("startup snapshots append the original wrapper environment to one local JSONL file", async () => {
   const directory = await temporary();
@@ -26,13 +28,22 @@ test("startup snapshots append the original wrapper environment to one local JSO
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-const manifest = { protocol: 1, serverInfo: { name: "fixture", version: "1", title: "Fixture" }, tools: [{ name: "echo", inputSchema: { type: "object" } }] };
+const manifest = {
+  protocol: 1, serverInfo: { name: "fixture", version: "1", title: "Fixture" },
+  tools: [
+    { name: "echo", description: "Complete CLI tool", inputSchema: { type: "object", properties: { value: { type: "string" } } }, annotations: { readOnlyHint: true, vendorHint: "preserved" }, _meta: { category: "fixture" }, vendorField: [1, 2] },
+    { name: "extended", description: "Additional final catalog tool", inputSchema: { type: "object" } },
+  ],
+  ttlMs: 0, cacheScope: "public", resultType: "complete", _meta: { vendorMetadata: { intact: true } }, vendorExtension: { arbitrary: ["kept", 1] },
+};
+const { protocol, serverInfo, ...publicResult } = manifest;
+const modernPublicResult = { ...publicResult, _meta: { ...publicResult._meta, "io.modelcontextprotocol/serverInfo": manifest.serverInfo } };
 const launch = { command: "node", args: ["cli.js"], cwd: "fixture", shell: false, env: { KEY: "value", CODEX_TOOL_CALL_ID: "session-one" } };
 async function temporary() { await mkdir(".tmp", { recursive: true }); return mkdtemp(resolve(".tmp", "discovery-")); }
 
 test("cache keys include complete configuration, normalize Windows names, and exclude only configured names", () => {
   const key = discoveryKey(launch);
-  for (const name of ["PATH", "Path", "pAtH", "INIT_CWD", "INIT_OTHER", "iNiT_other", "npm_config_local_prefix", "npm_package_json", "NPM_OTHER", "nPm_other"]) {
+  for (const name of ["PATH", "Path", "pAtH", "INIT_CWD", "INIT_OTHER", "iNiT_other", "npm_config_local_prefix", "npm_package_json", "NPM_OTHER", "nPm_other", "CoDeX_tOoL_cAlL_iD"]) {
     const first = { ...launch, env: { ...launch.env, [name]: "first" } };
     const second = { ...launch, env: { ...launch.env, [name]: "second" } };
     for (const platform of ["win32", "linux"]) {
@@ -52,18 +63,25 @@ test("cache validates entries, expires without extending hits, invalidates and s
   const directory = await temporary(); let time = 1000, loads = 0;
   const cache = createDiscoveryCache(launch, async () => { loads++; return manifest; }, { directory, now: () => time });
   try {
-    await cache.get(); const bytes = await readFile(cache.file, "utf8");
+    assert.deepEqual(await cache.get(), manifest); const bytes = await readFile(cache.file, "utf8");
     assert.equal(JSON.parse(bytes).expiresAt, 601000);
     assert.ok(!bytes.includes("session-one")); assert.ok(!bytes.includes('"KEY"'));
-    time++; await cache.get(); assert.equal(loads, 1); assert.equal(await readFile(cache.file, "utf8"), bytes);
+    time = 600999; assert.deepEqual(await cache.get(), manifest); assert.equal(loads, 1); assert.equal(await readFile(cache.file, "utf8"), bytes);
     time = 601001; await cache.get(); assert.equal(loads, 2);
     await writeFile(cache.file, "broken"); await cache.get(); assert.equal(loads, 3);
     const entry = JSON.parse(await readFile(cache.file, "utf8")); entry.manifest.tools[0].inputSchema = null;
     await writeFile(cache.file, JSON.stringify(entry)); await cache.get(); assert.equal(loads, 4);
     await cache.invalidate(); await cache.get(); assert.equal(loads, 5);
     assert.throws(() => createDiscoveryCache({ ...launch, env: { SPEECHMATICS_DISCOVERY_CACHE_TTL_MS: "bad" } }, () => manifest));
-    const invalid = createDiscoveryCache(launch, () => ({ ...manifest, sessionId: "private" }), { directory: join(directory, "invalid") });
-    await assert.rejects(invalid.get());
+    for (const extra of [{ sessionId: "private" }, { _meta: { progressToken: "private" } }, { cacheScope: "session" }, { requestState: "private" }]) {
+      const scopedManifest = { ...manifest, ...extra };
+      let scopedLoads = 0;
+      const scoped = createDiscoveryCache(launch, () => { scopedLoads++; return scopedManifest; }, { directory: join(directory, "scoped") });
+      assert.deepEqual(await scoped.get(), scopedManifest);
+      assert.deepEqual(await scoped.get(), scopedManifest);
+      assert.equal(scopedLoads, 2);
+      await assert.rejects(readFile(scoped.file));
+    }
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -92,7 +110,7 @@ test("legacy ping is local; a second process initializes and lists from shared c
         const params = { _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}, "io.modelcontextprotocol/clientInfo": { name: "fixture", version: "1" } } };
         const discovery = await call("server/discover", params);
         assert.ok(discovery.result, JSON.stringify(discovery));
-        assert.deepEqual((await call("tools/list", params)).result.tools, manifest.tools);
+        assert.deepEqual((await call("tools/list", params)).result, modernPublicResult);
         assert.ok((await call("ping", params)).error, "Modern protocol must not gain legacy ping");
         return;
       }
@@ -102,16 +120,39 @@ test("legacy ping is local; a second process initializes and lists from shared c
       assert.equal(init.result.serverInfo.name, "fixture"); assert.equal(init.result.protocolVersion, "2025-11-25");
       assert.deepEqual(Object.keys(init.result.capabilities), ["tools"]);
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-      assert.deepEqual((await call("tools/list")).result.tools, manifest.tools);
+      assert.deepEqual((await call("tools/list")).result, publicResult);
       assert.deepEqual((await call("ping")).result, {});
+      for (const method of ["prompts/list", "resources/list", "resources/templates/list"]) assert.equal((await call(method)).error.code, -32601);
       if (warm) {
         const response = await call("tools/call", { name: "echo", arguments: { value: "delegated" } });
         assert.equal(JSON.parse(response.result.content[0].text).arguments.value, "delegated");
         await rm(blocked);
         child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/tools/list_changed" }) + "\n");
-        assert.deepEqual((await call("tools/list")).result.tools, manifest.tools);
+        assert.deepEqual((await call("tools/list")).result, publicResult);
       }
     } finally { const closed = new Promise((done) => child.once("close", done)); child.stdin.end(); await closed; }
+  }
+  async function sdkSession(id, modern) {
+    const transport = new StdioClientTransport({ command: process.execPath, args: ["--import", pathToFileURL(preload).href, join(root, "mcp.js")], cwd: directory, env: { ...env, CODEX_TOOL_CALL_ID: id }, stderr: "pipe" });
+    const received = [];
+    const start = transport.start.bind(transport);
+    transport.start = async () => {
+      const onmessage = transport.onmessage;
+      transport.onmessage = (message, extra) => { received.push(structuredClone(message)); onmessage?.(message, extra); };
+      await start();
+    };
+    const client = new Client({ name: "sdk-fixture", version: "1" }, modern ? { versionNegotiation: { mode: { pin: "2026-07-28" } } } : {});
+    try {
+      await client.connect(transport);
+      assert.equal(client.getServerVersion().name, "fixture");
+      assert.deepEqual(Object.keys(client.getServerCapabilities()), ["tools"]);
+      const parsed = await client.listTools({ cursor: "first-page" });
+      assert.deepEqual(received.findLast((message) => message.result?.tools)?.result, modern ? modernPublicResult : publicResult);
+      if (!modern) await client.ping();
+      const result = await client.callTool({ name: "echo", arguments: { value: "sdk-delegated" } });
+      assert.equal(JSON.parse(result.content[0].text).arguments.value, "sdk-delegated");
+      return { wire: received.findLast((message) => message.result?.tools).result, parsed };
+    } finally { await client.close(); }
   }
   try {
     await session("first-session", false); await writeFile(blocked, "");
@@ -123,6 +164,17 @@ test("legacy ping is local; a second process initializes and lists from shared c
     assert.equal(new Set(snapshots.map((record) => record.pid)).size, 3);
     assert.ok(snapshots.every((record) => record.env.npm_config_package === "synthetic-original-wrapper-value"));
     assert.deepEqual(snapshots.map((record) => record.env.CODEX_TOOL_CALL_ID), ["first-session", "modern-session", "second-session"]);
+    // Start SDK coverage cold, then forbid discovery subprocesses for both replicas.
+    await rm(join(directory, "transcription", "discovery"), { recursive: true, force: true });
+    const cold = await sdkSession("sdk-cold", true);
+    await writeFile(blocked, "");
+    const warm = await sdkSession("sdk-warm", true);
+    const legacy = await sdkSession("sdk-legacy", false);
+    assert.deepEqual(cold, warm);
+    assert.deepEqual(legacy.wire, publicResult);
+    const allWorkers = (await readFile(log, "utf8")).trim().split("\n").map(JSON.parse);
+    assert.equal(allWorkers.filter((worker) => worker.mode === "--tool-manifest").length, 3);
+    assert.equal(allWorkers.filter((worker) => worker.mode === "--execute-tool").length, 4);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

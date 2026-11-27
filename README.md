@@ -152,6 +152,12 @@ Tool descriptions reflect the defaults captured during that refresh. Environment
 changes create a different cache entry; edits inside an env file take effect on
 the next refresh or after invalidation.
 
+Local expiry is independent of discovery response hints: even `ttlMs: 0` does
+not disable the local cache. The complete final tool catalog and its metadata
+are preserved without rewriting `ttlMs`, `cacheScope`, `resultType`, or `_meta`.
+Discovery carrying request/session identifiers is returned intact and skips
+disk caching. JSON-RPC request IDs are always supplied by the current exchange.
+
 Cache filenames hash the CLI command, arguments, working directory, and complete
 effective environment. `CODEX_TOOL_CALL_ID`, `PATH`, and names starting with
 `INIT_` or `NPM_` are excluded from the hash (the PATH and prefix checks are

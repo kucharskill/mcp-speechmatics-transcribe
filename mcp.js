@@ -45,7 +45,8 @@ async function createServer(context) {
       await discovery.invalidate();
       await server.sendToolListChanged();
     }
-    return { tools: manifest.tools };
+    const { protocol, serverInfo, ...result } = manifest;
+    return result;
   });
   server.setRequestHandler("tools/call", async ({ params }, context) => {
     try {
