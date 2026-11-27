@@ -142,6 +142,28 @@ disable a token. API errors are returned to the caller.
 Audio is uploaded to Speechmatics in EU1. Transcription usage is billed by Speechmatics.
 An API timeout can leave a remote job running; its ID is retained when available.
 
+## MCP discovery cache
+
+MCP discovery is shared across processes in the operating system temporary
+directory under `transcription/discovery/`. Its default lifetime is 10 minutes
+from a successful refresh; cache hits do not extend it. Set
+`SPEECHMATICS_DISCOVERY_CACHE_TTL_MS` to change the lifetime, or `0` to disable it.
+Tool descriptions reflect the defaults captured during that refresh. Environment
+changes create a different cache entry; edits inside an env file take effect on
+the next refresh or after invalidation.
+
+Cache filenames hash the CLI command, arguments, working directory, and complete
+effective environment. `CODEX_TOOL_CALL_ID` is excluded from the hash; additional
+names can be listed in `SPEECHMATICS_DISCOVERY_CACHE_KEY_EXCLUDE`. These exclusions
+never remove variables from the CLI environment. Windows environment names are
+case-insensitive. Exclude only transient values that do not affect discovery.
+
+Only validated tool definitions and server identity are cached, with timestamps
+and an opaque hash. Environment values, credentials, session state, and tool-call
+results are not stored. Expired or damaged entries are refreshed, and tool-list
+change notifications invalidate the cache. Warm discovery and legacy MCP ping
+do not start a CLI process. Actual tool calls always delegate to the CLI.
+
 ## Development and releases
 
 ```sh

@@ -95,6 +95,7 @@ test("CLI and MCP use an explicit env file and export a mocked transcription", {
   for (const key of Object.keys(environment)) {
     if (key.startsWith("SPEECHMATICS_")) delete environment[key];
   }
+  environment.SPEECHMATICS_DISCOVERY_CACHE_TTL_MS = "0";
   const envFile = join(directory, ".env");
   const input = join(directory, "sample.mp3");
   const transcript = {

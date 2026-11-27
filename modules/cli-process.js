@@ -1,34 +1,42 @@
-import { spawn } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Keep arguments and credentials on stdin/environment, outside the shell command.
-export function runCli(mode, request) {
+export function resolveCliLaunch() {
+  const modulePath = fileURLToPath(import.meta.url);
+  const cachedPackage = /[\\/]_npx[\\/][^\\/]+[\\/]node_modules[\\/]mcp-speechmatics-transcribe[\\/]/i.test(modulePath);
+  const npmExec = process.env.npm_command === "exec"
+    || (!process.env.npm_command && process.env.npm_lifecycle_event === "npx");
+  const useNpx = cachedPackage && npmExec;
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^npm_config_(package|call)$/i.test(key)));
+  env.SPEECHMATICS_ENV_FILE = process.env.SPEECHMATICS_ENV_FILE
+    ? resolve(process.env.SPEECHMATICS_ENV_FILE) : fileURLToPath(new URL("../.env", import.meta.url));
+  return {
+    command: useNpx ? "npx" : process.execPath,
+    args: useNpx ? ["-y", "--prefer-online", "--package=mcp-speechmatics-transcribe@latest", "--", "mcp-speechmatics-transcribe"]
+      : [fileURLToPath(new URL("../cli.js", import.meta.url))],
+    cwd: process.cwd(), env, shell: useNpx && process.platform === "win32",
+  };
+}
+
+export function runCli(mode, request, { launch = resolveCliLaunch(), signal } = {}) {
   return new Promise((done, reject) => {
     if (!["--tool-manifest", "--execute-tool"].includes(mode)) throw new Error("Unsupported CLI mode.");
-    const modulePath = fileURLToPath(import.meta.url);
-    const cachedPackage = /[\\/]_npx[\\/][^\\/]+[\\/]node_modules[\\/]mcp-speechmatics-transcribe[\\/]/i.test(modulePath);
-    const npmExec = process.env.npm_command === "exec"
-      || (!process.env.npm_command && process.env.npm_lifecycle_event === "npx");
-    const useNpx = cachedPackage && npmExec;
-    const launchArgs = useNpx
-      ? ["-y", "--prefer-online", "--package=mcp-speechmatics-transcribe@latest", "--", "mcp-speechmatics-transcribe", mode]
-      : [fileURLToPath(new URL("../cli.js", import.meta.url)), mode];
-    const windowsShell = useNpx && process.platform === "win32";
-    const environment = Object.fromEntries(Object.entries(process.env)
-      .filter(([key]) => !/^npm_config_(package|call)$/i.test(key)));
-    const command = useNpx ? "npx" : process.execPath;
-    const child = spawn(windowsShell ? command + " " + launchArgs.join(" ") : command, windowsShell ? [] : launchArgs, {
-      shell: windowsShell,
-      windowsHide: true,
-      stdio: ["pipe", "pipe", "inherit"],
-      env: {
-        ...environment,
-        SPEECHMATICS_ENV_FILE: process.env.SPEECHMATICS_ENV_FILE
-          ? resolve(process.env.SPEECHMATICS_ENV_FILE)
-          : fileURLToPath(new URL("../.env", import.meta.url)),
-      },
+    signal?.throwIfAborted();
+    const launchArgs = [...launch.args, mode];
+    const child = spawn(launch.shell ? launch.command + " " + launchArgs.join(" ") : launch.command, launch.shell ? [] : launchArgs, {
+      shell: launch.shell, cwd: launch.cwd, windowsHide: true,
+      stdio: ["pipe", "pipe", "inherit"], env: launch.env,
     });
+    const abort = () => {
+      if (launch.shell && process.platform === "win32" && child.pid) {
+        execFile("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true }, () => {});
+      } else child.kill();
+      reject(new DOMException("CLI operation was cancelled.", "AbortError"));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
     let output = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -40,6 +48,7 @@ export function runCli(mode, request) {
     });
     child.on("error", reject);
     child.stdin.on("error", reject);
+    child.once("close", () => signal?.removeEventListener("abort", abort));
     child.on("close", (code, signal) => {
       if (code !== 0) {
         reject(new Error(`CLI process exited with ${signal ?? code}.`));
