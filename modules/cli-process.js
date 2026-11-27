@@ -1,6 +1,17 @@
 import { spawn, execFile } from "node:child_process";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdirSync, appendFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+
+export function dumpStartupEnvironment(directory = join(tmpdir(), "transcription", "discovery")) {
+  const file = join(directory, "env-startup.jsonl");
+  try {
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    appendFileSync(file, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), env: process.env }) + "\n", { mode: 0o600 });
+    return file;
+  } catch { /* A diagnostic snapshot must not prevent MCP startup. */ }
+}
 
 // Keep arguments and credentials on stdin/environment, outside the shell command.
 export function resolveCliLaunch() {

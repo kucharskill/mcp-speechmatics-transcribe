@@ -1,8 +1,9 @@
 import { Server, PROTOCOL_VERSION_META_KEY } from "@modelcontextprotocol/server";
 import { serveStdio, StdioServerTransport } from "@modelcontextprotocol/server/stdio";
-import { runCli, resolveCliLaunch } from "./modules/cli-process.js";
+import { runCli, resolveCliLaunch, dumpStartupEnvironment } from "./modules/cli-process.js";
 import { createDiscoveryCache } from "./modules/discovery-cache.js";
 
+dumpStartupEnvironment();
 const launch = resolveCliLaunch();
 const discovery = createDiscoveryCache(launch, () => runCli("--tool-manifest", undefined, { launch }));
 let era;

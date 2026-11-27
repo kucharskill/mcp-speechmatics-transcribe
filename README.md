@@ -164,6 +164,13 @@ results are not stored. Expired or damaged entries are refreshed, and tool-list
 change notifications invalidate the cache. Warm discovery and legacy MCP ping
 do not start a CLI process. Actual tool calls always delegate to the CLI.
 
+At startup, each MCP wrapper appends one `{pid, startedAt, env}` record to the
+local `env-startup.jsonl` beside the cache. It captures the original wrapper
+environment before preparing the backend environment. This diagnostic file
+contains raw environment values, including credentials, and is created with
+user-only permissions where supported. It remains outside the repository and
+package; keep its contents private. Snapshot failures do not prevent startup.
+
 ## Development and releases
 
 ```sh

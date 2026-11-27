@@ -6,7 +6,25 @@ import { createInterface } from "node:readline";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createDiscoveryCache, discoveryKey } from "../modules/discovery-cache.js";
-import { runCli } from "../modules/cli-process.js";
+import { runCli, dumpStartupEnvironment } from "../modules/cli-process.js";
+
+test("startup snapshots append the original wrapper environment to one local JSONL file", async () => {
+  const directory = await temporary();
+  try {
+    const first = dumpStartupEnvironment(directory);
+    const second = dumpStartupEnvironment(directory);
+    assert.equal(first, second);
+    const records = (await readFile(first, "utf8")).trim().split("\n").map(JSON.parse);
+    assert.equal(records.length, 2);
+    for (const record of records) {
+      assert.equal(record.pid, process.pid);
+      assert.ok(Number.isFinite(Date.parse(record.startedAt)));
+      assert.ok(JSON.stringify(record.env) === JSON.stringify({ ...process.env }));
+    }
+    assert.equal(first, join(directory, "env-startup.jsonl"));
+    assert.equal(dumpStartupEnvironment(first), undefined);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 const manifest = { protocol: 1, serverInfo: { name: "fixture", version: "1", title: "Fixture" }, tools: [{ name: "echo", inputSchema: { type: "object" } }] };
 const launch = { command: "node", args: ["cli.js"], cwd: "fixture", shell: false, env: { KEY: "value", CODEX_TOOL_CALL_ID: "session-one" } };
@@ -51,7 +69,7 @@ test("legacy ping is local; a second process initializes and lists from shared c
     else {let body='';for await(const chunk of process.stdin)body+=chunk;console.log(JSON.stringify({content:[{type:'text',text:body}]}));}`);
   await writeFile(preload, `import cp from 'node:child_process';import {syncBuiltinESMExports} from 'node:module';
     const original=cp.spawn;cp.spawn=(command,args,options)=>original(process.execPath,[${JSON.stringify(fixture)},args.at(-1)],options);syncBuiltinESMExports();`);
-  const env = { ...process.env, TEMP: directory, TMP: directory, TMPDIR: directory, CODEX_TOOL_CALL_ID: "first-session", SPEECHMATICS_DISCOVERY_CACHE_TTL_MS: "600000" };
+  const env = { ...process.env, TEMP: directory, TMP: directory, TMPDIR: directory, npm_config_package: "synthetic-original-wrapper-value", CODEX_TOOL_CALL_ID: "first-session", SPEECHMATICS_DISCOVERY_CACHE_TTL_MS: "600000" };
   async function session(id, warm, modern = false) {
     const child = spawn(process.execPath, ["--import", pathToFileURL(preload).href, join(root, "mcp.js")], { cwd: directory, env: { ...env, CODEX_TOOL_CALL_ID: id } });
     const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator](); let errors = "", nextId = 0;
@@ -91,6 +109,11 @@ test("legacy ping is local; a second process initializes and lists from shared c
     await session("modern-session", true, true); await session("second-session", true);
     const workers = (await readFile(log, "utf8")).trim().split("\n").map(JSON.parse);
     assert.deepEqual(workers, [{ mode: "--tool-manifest", id: "first-session" }, { mode: "--execute-tool", id: "second-session" }, { mode: "--tool-manifest", id: "second-session" }]);
+    const snapshots = (await readFile(join(directory, "transcription", "discovery", "env-startup.jsonl"), "utf8")).trim().split("\n").map(JSON.parse);
+    assert.equal(snapshots.length, 3);
+    assert.equal(new Set(snapshots.map((record) => record.pid)).size, 3);
+    assert.ok(snapshots.every((record) => record.env.npm_config_package === "synthetic-original-wrapper-value"));
+    assert.deepEqual(snapshots.map((record) => record.env.CODEX_TOOL_CALL_ID), ["first-session", "modern-session", "second-session"]);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
