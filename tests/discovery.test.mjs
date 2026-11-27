@@ -32,6 +32,15 @@ async function temporary() { await mkdir(".tmp", { recursive: true }); return mk
 
 test("cache keys include complete configuration, normalize Windows names, and exclude only configured names", () => {
   const key = discoveryKey(launch);
+  for (const name of ["PATH", "Path", "pAtH", "INIT_CWD", "INIT_OTHER", "iNiT_other", "npm_config_local_prefix", "npm_package_json", "NPM_OTHER", "nPm_other"]) {
+    const first = { ...launch, env: { ...launch.env, [name]: "first" } };
+    const second = { ...launch, env: { ...launch.env, [name]: "second" } };
+    for (const platform of ["win32", "linux"]) {
+      assert.equal(discoveryKey(first, platform), discoveryKey(second, platform));
+      assert.equal(discoveryKey(first, platform), discoveryKey(launch, platform));
+    }
+    assert.equal(first.env[name], "first");
+  }
   for (const patch of [{ command: "other" }, { args: ["other"] }, { cwd: "other" }, { env: { ...launch.env, KEY: "other" } }, { env: { ...launch.env, EXTRA: "other" } }]) assert.notEqual(discoveryKey({ ...launch, ...patch }), key);
   assert.equal(discoveryKey({ ...launch, env: { CODEX_TOOL_CALL_ID: "session-two", KEY: "value" } }), key);
   assert.equal(discoveryKey({ ...launch, env: { key: "value", codex_tool_call_id: "other" } }, "win32"), discoveryKey(launch, "win32"));

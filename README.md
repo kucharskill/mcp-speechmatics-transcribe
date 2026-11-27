@@ -153,7 +153,9 @@ changes create a different cache entry; edits inside an env file take effect on
 the next refresh or after invalidation.
 
 Cache filenames hash the CLI command, arguments, working directory, and complete
-effective environment. `CODEX_TOOL_CALL_ID` is excluded from the hash; additional
+effective environment. `CODEX_TOOL_CALL_ID`, `PATH`, and names starting with
+`INIT_` or `NPM_` are excluded from the hash (the PATH and prefix checks are
+case-insensitive); additional
 names can be listed in `SPEECHMATICS_DISCOVERY_CACHE_KEY_EXCLUDE`. These exclusions
 never remove variables from the CLI environment. Windows environment names are
 case-insensitive. Exclude only transient values that do not affect discovery.

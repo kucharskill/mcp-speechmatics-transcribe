@@ -20,7 +20,7 @@ export function discoveryKey(launch, platform = process.platform) {
   const normalize = (key) => platform === "win32" ? key.toUpperCase() : key;
   const excluded = new Set(["CODEX_TOOL_CALL_ID", ...(launch.env.SPEECHMATICS_DISCOVERY_CACHE_KEY_EXCLUDE ?? "").split(",").map((key) => key.trim()).filter(Boolean)].map(normalize));
   const env = Object.entries(launch.env).map(([key, value]) => [normalize(key), value])
-    .filter(([key]) => !excluded.has(key)).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    .filter(([key]) => !excluded.has(key) && !/^(?:PATH$|INIT_|NPM_)/i.test(key)).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   return createHash("sha256").update(JSON.stringify({ version: 1, command: launch.command, args: launch.args, cwd: launch.cwd, shell: launch.shell, env })).digest("hex");
 }
 
