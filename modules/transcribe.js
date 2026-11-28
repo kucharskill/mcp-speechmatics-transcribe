@@ -10,6 +10,7 @@ import { loadConfig } from "./config.js";
 import { buildSegments } from "./segments.js";
 import { ApiError, getTranscript, submitJob } from "./speechmatics.js";
 import { buildWebVtt } from "./subtitles.js";
+import { initializeUsage, refreshUsage, roundHours } from "./usage.js";
 
 const ffmpeg = promisify(execFile);
 
@@ -49,6 +50,8 @@ export async function transcribe(file, overrides = {}) {
     fileName: inputName,
     startedAt: new Date(started).toISOString(),
     tokenSha256: null,
+    model: options.model,
+    language: options.language,
   };
   let candidate;
   let result;
@@ -60,6 +63,8 @@ export async function transcribe(file, overrides = {}) {
       convertedFile = join(directory, `audio-${id}.mp3`);
       conversion = await convertAudio(input, convertedFile);
     }
+    await initializeUsage(tokens).catch(() => {});
+    record.reservationExpiresAt = new Date(Date.now() + options.timeoutSeconds * 1000).toISOString();
     candidate = await reserveToken(tokens, record);
     if (!candidate) throw new Error("No active tokens remain. Check the log and SPEECHMATICS_TOKENS.");
     record.tokenSha256 = candidate.sha;
@@ -79,6 +84,7 @@ export async function transcribe(file, overrides = {}) {
     await writeFile(subtitlesFile, buildWebVtt(transcript, audioEvents), { encoding: "utf8", flag: "wx" });
     await writeFile(markdownFile, buildMarkdown(input, transcript, audioEvents), { encoding: "utf8", flag: "wx" });
     record.audioDurationSeconds = transcript.job?.duration ?? null;
+    record.audioDurationHours = record.audioDurationSeconds === null ? null : roundHours(record.audioDurationSeconds / 3600);
     result = {
       jobId: record.jobId, directory, transcriptFile, segmentsFile, subtitlesFile, markdownFile,
       convertedFile, conversion, speakers: segments.speakers, logPath,
@@ -105,6 +111,7 @@ export async function transcribe(file, overrides = {}) {
   } catch (error) {
     logError = error.message;
   }
+  if (candidate) await refreshUsage(candidate).catch(() => {});
   if (record.error || logError) {
     const failure = record.error ?? { message: "Could not save the log." };
     throw Object.assign(new Error(failure.message), {

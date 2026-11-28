@@ -78,19 +78,19 @@ the adapter contains no transcription-specific schemas or execution logic.
 
 ## Configuration
 
-The read-only `token_status` tool checks all configured tokens through the EU1
+The `token_status` tool checks all configured tokens through the EU1
 Batch usage endpoint. Optional `since` and `until` dates use YYYY-MM-DD; the default
-start is the first day of the current UTC month and the default end is today in UTC,
+start is 1970-01-01 (all available history) and the default end is today in UTC,
 explicitly including the current day's usage. Results identify each key by its
 configured login or a masked token. Excluded keys return `excluded` without an API
-request. Successful requests return `active` and the API's usage fields directly;
+request. Successful requests return `active` and usage hours rounded to one decimal;
 failures return `error` with available HTTP details. Short anonymous tokens are fully
 masked. No raw token or token hash is returned.
 
 Usage reflects the scope reported by Speechmatics and is not attributed exclusively
 to an individual key. Successful access does not guarantee funds for another job.
 Credits are omitted because the public usage API does not provide a balance.
-Status checks do not update logs, rotation, or exclusions.
+Successful status checks update local usage snapshots used for rotation; token exclusions are unchanged.
 
 Invocation arguments override process environment, followed by the selected env file
 and built-in defaults. SPEECHMATICS_ENV_FILE or --env-file selects an env file.
@@ -133,11 +133,29 @@ when the speaker changes. Polish speaker and known event labels are retained for
 the existing output format. Unknown speaker labels and event types are preserved.
 Audio events appear in Markdown and WebVTT at confidence >=0.90.
 
-The shared transcription/logs.json records status, elapsed time, job ID, and
-token SHA-256. Tokens are selected in round-robin order across transcription
-requests. Token rotation skips credentials disabled after authentication,
-entitlement, or exhausted-account-limit errors. HTTP 429 rate limits alone do not
-disable a token. API errors are returned to the caller.
+The shared transcription/logs.json contains two arrays: transcriptions and usage.
+Existing transcription history is preserved when the log is first updated.
+Transcription records include status, elapsed time, audio duration, model, language,
+job ID, and token SHA-256. Usage snapshots include account identity, token SHA-256,
+date range, retrieval times, job count, and hours rounded to one decimal. Exact
+seconds are retained for comparisons and scheduling.
+
+Before the first transcription, missing lifetime snapshots are fetched for active
+accounts; snapshots ending before today are also refreshed. Selection prefers
+available accounts with the lowest lifetime usage, including completed local jobs
+newer than the usage snapshot. Running reservations distribute concurrent work;
+reservations expire at the configured transcription timeout. Ties use round-robin
+order. If usage is unavailable for an eligible account, selection falls back to
+round-robin order with running reservations considered.
+
+After every transcription attempt that reserved a token, its usage is refreshed.
+Successful token_status reads also update usage. Updates use a file lock and an
+atomic write, reject smaller counters and older date ranges, and never add repeated
+API totals together. Usage failures preserve previous values and do not fail a
+transcription. Provider reporting can lag; local pending usage is an estimate.
+Token rotation skips credentials disabled after authentication, entitlement, or
+exhausted-account-limit errors. HTTP 429 rate limits alone do not disable a token.
+API transcription errors are returned without retrying on another account.
 
 Audio is uploaded to Speechmatics in EU1. Transcription usage is billed by Speechmatics.
 An API timeout can leave a remote job running; its ID is retained when available.

@@ -37,12 +37,12 @@ export function createTools(configuredDefaults) {
     },
     token_status: {
       definition: {
-        description: "Check configured tokens and read Batch usage from Speechmatics. Excluded tokens are reported without API requests. Identity is the configured login or a masked token. API access does not guarantee funds for transcription. Usage is returned in the API's scope, not attributed exclusively to a key. This read-only check does not change rotation, exclusions, or logs.",
+        description: "Check configured tokens and read Batch usage from Speechmatics. Default scope is lifetime (1970-01-01 through today). Hours are rounded to one decimal. Successful reads update local usage snapshots used for token selection; exclusions are unchanged. Excluded tokens are reported without API requests. Identity is the configured login or a masked token. API access does not guarantee funds for transcription. Usage is returned in the API's scope, not attributed exclusively to a key.",
         inputSchema: z.strictObject({
-          since: z.iso.date().optional().describe("Inclusive start date YYYY-MM-DD. Defaults to the first day of the current UTC month."),
+          since: z.iso.date().optional().describe("Inclusive start date YYYY-MM-DD. Defaults to 1970-01-01 for all available history."),
           until: z.iso.date().optional().describe("Inclusive end date YYYY-MM-DD. Defaults explicitly to today in UTC, including the current day's usage."),
         }),
-        annotations: { readOnlyHint: true },
+        annotations: { readOnlyHint: false },
       },
       execute: async (options) => {
         try {

@@ -15,7 +15,7 @@ const expected = [
   "modules/audio-events.js", "modules/cli-process.js", "modules/cli-protocol.js",
   "modules/config.js", "modules/discovery-cache.js", "modules/history.js", "modules/markdown.js",
   "modules/options.js", "modules/segments.js", "modules/speechmatics.js",
-  "modules/subtitles.js", "modules/token-status.js", "modules/tools.js", "modules/transcribe.js",
+  "modules/subtitles.js", "modules/token-status.js", "modules/tools.js", "modules/transcribe.js", "modules/usage.js",
 ].sort();
 const actual = packed.files.map(({ path }) => path).sort();
 if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error("Unexpected files in the npm archive.");

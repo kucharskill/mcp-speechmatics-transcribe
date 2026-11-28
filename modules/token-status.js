@@ -1,15 +1,16 @@
 import { createHash } from "node:crypto";
 import { loadConfig } from "./config.js";
 import { readLog } from "./history.js";
-import { ApiError, getUsage } from "./speechmatics.js";
+import { ApiError } from "./speechmatics.js";
+import { refreshUsage, lifetimeSince } from "./usage.js";
 
 export async function tokenStatus({ since, until } = {}) {
   const today = new Date().toISOString().slice(0, 10);
-  since ??= today.slice(0, 7) + "-01";
+  since ??= lifetimeSince;
   until ??= today;
   if (until < since) throw new Error("until must be on or after since.");
   const { tokens } = await loadConfig();
-  const excluded = new Set((await readLog())
+  const excluded = new Set((await readLog()).transcriptions
     .filter((entry) => entry.tokenDisabled)
     .map((entry) => entry.tokenSha256));
   const results = [];
@@ -23,9 +24,7 @@ export async function tokenStatus({ since, until } = {}) {
       continue;
     }
     try {
-      const { since: start, until: end, summary, details } = await getUsage(
-        token, since, until, AbortSignal.timeout(15000),
-      );
+      const { since: start, until: end, summary, details } = await refreshUsage({ token, login }, since, until);
       results.push({ ...identity, status: "active", usage: { since: start, until: end, summary, details } });
     } catch (error) {
       results.push({

@@ -17,7 +17,7 @@ test("token entries support optional logins and reject empty tokens", () => {
   for (const entry of ["", "user:", "one,,two"]) assert.throws(() => parseTokens(entry), /empty token/);
 });
 
-test("token status skips exclusions, masks anonymous keys, and preserves raw usage", async () => {
+test("token status skips exclusions, masks keys, rounds hours, and persists usage", async () => {
   await mkdir(".tmp", { recursive: true });
   const root = resolve(".");
   const directory = await mkdtemp(join(root, ".tmp", "token-status-"));
@@ -42,14 +42,14 @@ test("token status skips exclusions, masks anonymous keys, and preserves raw usa
       const endpoint = new URL(url);
       assert.equal(endpoint.pathname, "/v2/usage");
       const today = new Date().toISOString().slice(0, 10);
-      assert.equal(endpoint.searchParams.get("since"), process.env.STATUS_DEFAULT_DATES ? today.slice(0, 7) + "-01" : "2026-01-01");
+      assert.equal(endpoint.searchParams.get("since"), process.env.STATUS_DEFAULT_DATES ? "1970-01-01" : "2026-01-01");
       assert.equal(endpoint.searchParams.get("until"), process.env.STATUS_DEFAULT_DATES ? today : "2026-01-31");
       assert.notEqual(init.headers.Authorization, "Bearer synthetic-excluded");
       calls++;
       if (init.headers.Authorization === "Bearer synthetic-anonymous") {
         return Response.json({ error: "synthetic-anonymous rejected" }, { status: 401 });
       }
-      return Response.json(${JSON.stringify(usage)});
+      return Response.json({ ...${JSON.stringify(usage)}, since: endpoint.searchParams.get("since"), until: endpoint.searchParams.get("until") });
     };
     process.on("exit", () => assert.equal(calls, 3));
   `);
@@ -61,14 +61,18 @@ test("token status skips exclusions, masks anonymous keys, and preserves raw usa
       input: JSON.stringify({ protocol: 1, name: "token_status", arguments: { since: "2026-01-01", until: "2026-01-31" } }),
     });
     const result = JSON.parse(output);
+    const rounded = { ...usage, summary: summary.map((row) => ({ ...row, duration_hrs: 1.3 })) };
     assert.deepEqual(result.structuredContent.tokens, [
-      { login: "account", status: "active", usage },
+      { login: "account", status: "active", usage: rounded },
       { token: "synt****mous", status: "error", error: { message: "Speechmatics HTTP 401: [token] rejected", httpStatus: 401 } },
       { login: "skip", status: "excluded" },
-      { token: "****", status: "active", usage },
+      { token: "****", status: "active", usage: rounded },
     ]);
     assert.ok(!output.includes("credits") && !output.includes("tokenSha256"));
-    assert.equal(await readFile(join(directory, "transcription", "logs.json"), "utf8"), log);
+    const stored = JSON.parse(await readFile(join(directory, "transcription", "logs.json"), "utf8"));
+    assert.deepEqual(stored.transcriptions, JSON.parse(log));
+    assert.equal(stored.usage.length, 2);
+    assert.ok(stored.usage.every((entry) => entry.durationHours === 1.3 && entry.durationSeconds === 4500));
     const defaultDates = JSON.parse(execFileSync(process.execPath, [
       "--import", pathToFileURL(mock).href, "cli.js", "--env-file", envFile, "--execute-tool",
     ], {
